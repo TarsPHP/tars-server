@@ -10,6 +10,7 @@ namespace Tars\core;
 
 use Tars\Consts;
 use Tars\config\ConfigServant;
+use Tars\monitor\PropertyFWrapper;
 use Tars\monitor\StatFWrapper;
 use Tars\protocol\ProtocolFactory;
 use Tars\report\ServerFSync;
@@ -85,11 +86,11 @@ class Server
             // 判断是否是timer服务
             if (isset($this->tarsConfig['tars']['application']['server']['isTimer']) &&
                 $this->tarsConfig['tars']['application']['server']['isTimer'] == true) {
-                $timerDir = $this->basePath.'src/timer/';
+                $timerDir = $this->basePath . 'src/timer/';
                 if (is_dir($timerDir)) {
                     $files = scandir($timerDir);
                     foreach ($files as $f) {
-                        $fileName = $timerDir.$f;
+                        $fileName = $timerDir . $f;
                         if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
                             $this->timers[] = $fileName;
                         }
@@ -116,8 +117,8 @@ class Server
             $this->sw->table = $this->table;
         }
 
-        $this->masterPidFile = $this->dataPath.'/master.pid';
-        $this->managerPidFile = $this->dataPath.'/manager.pid';
+        $this->masterPidFile = $this->dataPath . '/master.pid';
+        $this->managerPidFile = $this->dataPath . '/manager.pid';
 
         $this->protocol = ProtocolFactory::getProtocol($this->protocolName);
 
@@ -145,13 +146,13 @@ class Server
         } elseif (function_exists('swoole_set_process_name')) {
             swoole_set_process_name($name);
         } else {
-            trigger_error(__METHOD__.' failed. require cli_set_process_title or swoole_set_process_name.');
+            trigger_error(__METHOD__ . ' failed. require cli_set_process_title or swoole_set_process_name.');
         }
     }
 
     public function onMasterStart($server)
     {
-        $this->_setProcessName($this->application.'.'.$this->serverName.': master process');
+        $this->_setProcessName($this->application . '.' . $this->serverName . ': master process');
         file_put_contents($this->masterPidFile, $server->master_pid);
         file_put_contents($this->managerPidFile, $server->manager_pid);
 
@@ -165,7 +166,7 @@ class Server
     public function onManagerStart($server)
     {
         // rename manager process
-        $this->_setProcessName($this->application.'.'.$this->serverName.': manager process');
+        $this->_setProcessName($this->application . '.' . $this->serverName . ': manager process');
     }
 
     public function onWorkerStart($server, $workerId)
@@ -192,13 +193,13 @@ class Server
         }
 
         if ($workerId >= $this->worker_num) {
-            $this->_setProcessName($this->application.'.'.$this->serverName.': task worker process');
+            $this->_setProcessName($this->application . '.' . $this->serverName . ': task worker process');
         } else {
-            $this->_setProcessName($this->application.'.'.$this->serverName.': event worker process');
+            $this->_setProcessName($this->application . '.' . $this->serverName . ': event worker process');
             if (isset($this->timers[$workerId])) {
                 $runnable = $this->timers[$workerId];
                 require_once $runnable;
-                $className = $this->namespaceName.'timer\\'.basename($runnable, '.php');
+                $className = $this->namespaceName . 'timer\\' . basename($runnable, '.php');
 
                 $obj = new $className();
                 if (method_exists($obj, 'execute')) {
@@ -207,7 +208,7 @@ class Server
                             $funcName = 'execute';
                             $obj->$funcName();
                         } catch (\Exception $e) {
-                            error_log("error in runnable: $runnable, worker id: $workerId, e: ".print_r($e, true));
+                            error_log("error in runnable: $runnable, worker id: $workerId, e: " . print_r($e, true));
                         }
                     });
                 }
@@ -241,57 +242,166 @@ class Server
     {
         switch ($taskId) {
             // 进行定时上报
-            case 0:{
-                $application = $data['application'];
-                $serverName = $data['serverName'];
-                $masterPid = $data['masterPid'];
-                $adapter = $data['adapter'];
-                $mode = $data['mode'];
-                $host = $data['host'];
-                $port = $data['port'];
-                $timeout = $data['timeout'];
-                $objName = $data['objName'];
+            case 0:
+                {
+                    $application = $data['application'];
+                    $serverName = $data['serverName'];
+                    $masterPid = $data['masterPid'];
+                    $adapter = $data['adapter'];
+                    $mode = $data['mode'];
+                    $host = $data['host'];
+                    $port = $data['port'];
+                    $timeout = $data['timeout'];
+                    $objName = $data['objName'];
 
-                \swoole_timer_tick(10000, function () use ($application, $serverName, $masterPid, $adapter, $mode, $host, $port, $timeout, $objName) {
-                    // 进行一次上报
-                    $serverInfo = new ServerInfo();
-                    $serverInfo->adapter = $adapter;
-                    $serverInfo->application = $application;
-                    $serverInfo->serverName = $serverName;
-                    $serverInfo->pid = $masterPid;
+                    \swoole_timer_tick(10000, function () use (
+                        $application,
+                        $serverName,
+                        $masterPid,
+                        $adapter,
+                        $mode,
+                        $host,
+                        $port,
+                        $timeout,
+                        $objName
+                    ) {
+                        // 进行一次上报
+                        $serverInfo = new ServerInfo();
+                        $serverInfo->adapter = $adapter;
+                        $serverInfo->application = $application;
+                        $serverInfo->serverName = $serverName;
+                        $serverInfo->pid = $masterPid;
 
-                    $serverF = new ServerFSync($host, $port, $objName);
-                    $serverF->keepAlive($serverInfo);
+                        $serverF = new ServerFSync($host, $port, $objName);
+                        $serverF->keepAlive($serverInfo);
 
-                    $adminServerInfo = new ServerInfo();
-                    $adminServerInfo->adapter = 'AdminAdapter';
-                    $adminServerInfo->application = $application;
-                    $adminServerInfo->serverName = $serverName;
-                    $adminServerInfo->pid = $masterPid;
-                    $serverF->keepAlive($adminServerInfo);
-                });
+                        $adminServerInfo = new ServerInfo();
+                        $adminServerInfo->adapter = 'AdminAdapter';
+                        $adminServerInfo->application = $application;
+                        $adminServerInfo->serverName = $serverName;
+                        $adminServerInfo->pid = $masterPid;
+                        $serverF->keepAlive($adminServerInfo);
+                    });
 
-                //主调定时上报
-                $locator = $data['client']['locator'];
-                $socketMode = 2;
-                $statServantName = $data['client']['stat'];
-                $reportInterval = $data['client']['report-interval'];
-                \swoole_timer_tick($reportInterval,
-                    function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
+                    //主调定时上报
+                    $locator = $data['client']['locator'];
+                    $socketMode = 2;
+                    $statServantName = $data['client']['stat'];
+                    $reportInterval = $data['client']['report-interval'];
+                    \swoole_timer_tick($reportInterval,
+                        function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
+                            try {
+                                $statFWrapper = new StatFWrapper($locator, $socketMode, $statServantName, $serverName,
+                                    $reportInterval);
+                                $statFWrapper->sendStat();
+                            } catch (\Exception $e) {
+                                var_dump((string)$e);
+                            }
+                        });
+
+                    \swoole_timer_tick($reportInterval, function () use ($locator, $application, $serverName) {
                         try {
-                            $statFWrapper = new StatFWrapper($locator, $socketMode, $statServantName, $serverName,
-                                $reportInterval);
-                            $statFWrapper->sendStat();
-                        } catch (\Exception $e) {
-                            var_dump((string) $e);
+                            $localIP = swoole_get_local_ip();
+                            $msgHeadArr = [];
+                            $msgBodyArr = [];
+
+                            //系统内存使用情况
+                            exec("free -m", $sysMemInfo);
+                            preg_match_all("/\d+/s", $sysMemInfo[2], $matches);
+                            if (isset($matches[0][0])) {
+                                $msgHead = [
+                                    'ip' => $localIP['eth1'],
+                                    'propertyName' => 'system.memoryUsage'
+                                ];
+                                $msgBody = [
+                                    'policy' => 'Avg',
+                                    'value' => $matches[0][0]
+                                ];
+                                $msgHeadArr[] = $msgHead;
+                                $msgBodyArr[] = $msgBody;
+                            }
+                            //服务内存使用情况
+                            exec("ps -e -o 'rsz,cmd' | grep {$serverName} | grep -v grep | awk '{count += $1}; END {print count}'",
+                                $serverMemInfo);
+                            if (isset($serverMemInfo)) {
+                                $msgHead = [
+                                    'ip' => $localIP['eth1'],
+                                    'propertyName' => $serverName . '.memoryUsage'
+                                ];
+                                $msgBody = [
+                                    'policy' => 'Avg',
+                                    'value' => $serverMemInfo[0]
+                                ];
+                                $msgHeadArr[] = $msgHead;
+                                $msgBodyArr[] = $msgBody;
+                            }
+                            //系统cpu使用情况
+                            exec("mpstat -P ALL | awk '{if($12!=\"\") print $12}' | tail -n +3", $cpusInfo);
+                            if (isset($cpusInfo)) {
+                                foreach ($cpusInfo as $key => $cpuInfo) {
+                                    $cpuUsage = 100 - $cpuInfo;
+                                    $msgHead = [
+                                        'ip' => $localIP['eth1'],
+                                        'propertyName' => "system.cpu{$key}Usage"
+                                    ];
+                                    $msgBody = [
+                                        'policy' => 'Avg',
+                                        'value' => $cpuUsage
+                                    ];
+                                    $msgHeadArr[] = $msgHead;
+                                    $msgBodyArr[] = $msgBody;
+                                }
+                            }
+                            //swoole特性
+                            exec("ps aux | grep {$serverName} | grep 'event worker process' | grep -v grep | wc -l",
+                                $swooleWorkerNum);
+                            if (isset($swooleWorkerNum)) {
+                                $msgHead = [
+                                    'ip' => $localIP['eth1'],
+                                    'propertyName' => $serverName . '.swooleWorkerNum'
+                                ];
+                                $msgBody = [
+                                    'policy' => 'Avg',
+                                    'value' => $swooleWorkerNum[0]
+                                ];
+                                $msgHeadArr[] = $msgHead;
+                                $msgBodyArr[] = $msgBody;
+                            }
+                            //连接数
+                            exec("ps -ef | grep {$serverName} | grep -v grep | awk '{print $2}'", $serverPidInfo);
+                            $tmpId = [];
+                            foreach ($serverPidInfo as $pid) {
+                                $tmpId[] = $pid . "/";
+                            }
+                            $grepPidInfo = implode("|", $tmpId);
+                            $command = "netstat -anlp | grep tcp | grep -E '{$grepPidInfo}' | awk '{print $6}' | awk -F: '{print $1}'|sort|uniq -c|sort -nr";
+                            exec($command, $netStatInfo);
+                            foreach ($netStatInfo as $statInfo) {
+                                $statArr = explode(' ', trim($statInfo));
+                                $msgHead = [
+                                    'ip' => $localIP['eth1'],
+                                    'propertyName' => $serverName . '.netStat.' . $statArr[1]
+                                ];
+                                $msgBody = [
+                                    'policy' => 'Avg',
+                                    'value' => $statArr[0]
+                                ];
+                                $msgHeadArr[] = $msgHead;
+                                $msgBodyArr[] = $msgBody;
+                            }
+                            $propertyFWrapper = new PropertyFWrapper($locator, 2, $application . '.' . $serverName);
+                            $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
+                        } catch (\Exception $exception) {
+                            var_dump((string)$exception);
                         }
                     });
 
-                break;
-            }
-            default:{
-                break;
-            }
+                    break;
+                }
+            default:
+                {
+                    break;
+                }
         }
     }
 
@@ -335,11 +445,9 @@ class Server
         $sFuncName = $unpackResult['sFuncName'];
 
         // 处理管理端口相关的逻辑
-        if ($sServantName === 'AdminObj')
-        {
-            $this->processAdmin($unpackResult,$sFuncName,$response);
+        if ($sServantName === 'AdminObj') {
+            $this->processAdmin($unpackResult, $sFuncName, $response);
         }
-
 
 
         $event = new Event();
@@ -382,15 +490,16 @@ class Server
     }
 
     //拉取配置到指定目录
-    public function loadTarsConfig(){
-        try{
+    public function loadTarsConfig()
+    {
+        try {
             $servicesInfo = $this->servicesInfo;
-            if( !empty($servicesInfo) && isset($servicesInfo['saveTarsConfigFileDir']) && isset($servicesInfo['saveTarsConfigFileName']) ){
+            if (!empty($servicesInfo) && isset($servicesInfo['saveTarsConfigFileDir']) && isset($servicesInfo['saveTarsConfigFileName'])) {
                 $fileNameArr = array_filter($servicesInfo['saveTarsConfigFileName']);
                 $app = $this->tarsConfig['tars']['application']['server']['app'];
                 $server = $this->tarsConfig['tars']['application']['server']['server'];
 
-                if( !empty($fileNameArr) && $app!='' && $server!='' ){
+                if (!empty($fileNameArr) && $app != '' && $server != '') {
                     $config = new \Tars\client\CommunicatorConfig();
                     $locator = $this->tarsConfig['tars']['application']['client']['locator'];
                     $moduleName = $this->tarsConfig['tars']['application']['client']['modulename'];
@@ -400,27 +509,27 @@ class Server
 
                     $conigServant = new \Tars\config\ConfigServant($config);
 
-                    foreach ( $fileNameArr as $filename ){
+                    foreach ($fileNameArr as $filename) {
                         $savefile = $filename;
-                        if( substr($filename,0,1) != DIRECTORY_SEPARATOR ){
+                        if (substr($filename, 0, 1) != DIRECTORY_SEPARATOR) {
                             //相对路径转绝对路径
                             $basePath = $this->tarsConfig['tars']['application']['server']['basepath'];
-                            $savefile = $basePath.$servicesInfo['saveTarsConfigFileDir'].$filename;
+                            $savefile = $basePath . $servicesInfo['saveTarsConfigFileDir'] . $filename;
                         }
 
                         $configStr = '';
                         $conigServant->loadConfig($app, $server, $filename, $configStr);
-                        if( $configStr!='' ){ //保存文件
+                        if ($configStr != '') { //保存文件
                             $file = fopen($savefile, "w");
                             fwrite($file, $configStr);
                             fclose($file);
-                            var_dump("loadTarsConfig success : ".$savefile);
+                            var_dump("loadTarsConfig success : " . $savefile);
                         }
                     }
                 }
             }
-        }catch (\Exception $e){
-            var_dump((string) $e);
+        } catch (\Exception $e) {
+            var_dump((string)$e);
             return false;
         }
     }
@@ -448,90 +557,91 @@ class Server
         $serverF->keepAlive($serverInfo);
     }
 
-    private function processAdmin($unpackResult,$sFuncName,$response) {
+    private function processAdmin($unpackResult, $sFuncName, $response)
+    {
         $app = $this->application;
         $server = $this->serverName;
 
         $sBuffer = $unpackResult['sBuffer'];
         $iVersion = $unpackResult['iVersion'];
         $iRequestId = $unpackResult['iRequestId'];
-        switch ($sFuncName)
-        {
+        switch ($sFuncName) {
             case 'shutdown':
-            {
-                $cmd = "kill -15 ".$server->master_pid;
-                exec($cmd, $output, $r);
-                break;
-            }
-            case 'notify':
-            {
-                $iVersion = $unpackResult['iVersion'];
-
-                if ($iVersion === Consts::TUPVERSION) {
-                    $cmd = \TUPAPI::getString('cmd', $sBuffer, false, $iVersion);
-
-                } elseif ($iVersion === Consts::TARSVERSION) {
-                    $cmd = \TUPAPI::getString(1, $sBuffer, false, $iVersion);
-                }
-
-                $returnStr = '';
-                // 查看服务状态
-                if($cmd == "tars.viewstatus")
                 {
-                    $returnStr = "[1]:==================================================\n[proxy config]:\n";
-                    foreach ($this->tarsConfig['tars']['application']['client'] as $key => $value) {
-                        $returnStr .= "$key      ".$value;
-                        $returnStr .= "\n";
-                    }
-                    $returnStr .= "--------------------------------------------------\n[server config]:\n";
-                    foreach ($this->tarsConfig['tars']['application']['server'] as $key => $value) {
-                        if($key == "adapters") continue;
-                        $returnStr .= "$key      ".$value;
-                        $returnStr .= "\n";
+                    $cmd = "kill -15 " . $server->master_pid;
+                    exec($cmd, $output, $r);
+                    break;
+                }
+            case 'notify':
+                {
+                    $iVersion = $unpackResult['iVersion'];
+
+                    if ($iVersion === Consts::TUPVERSION) {
+                        $cmd = \TUPAPI::getString('cmd', $sBuffer, false, $iVersion);
+
+                    } elseif ($iVersion === Consts::TARSVERSION) {
+                        $cmd = \TUPAPI::getString(1, $sBuffer, false, $iVersion);
                     }
 
-                    foreach ($this->tarsConfig['tars']['application']['server']['adapters'] as $adapter) {
-                        $returnStr .= "--------------------------------------------------\n";
-                        foreach ($adapter as $key => $value) {
-                            $returnStr .= "$key      ".$value;
+                    $returnStr = '';
+                    // 查看服务状态
+                    if ($cmd == "tars.viewstatus") {
+                        $returnStr = "[1]:==================================================\n[proxy config]:\n";
+                        foreach ($this->tarsConfig['tars']['application']['client'] as $key => $value) {
+                            $returnStr .= "$key      " . $value;
                             $returnStr .= "\n";
                         }
+                        $returnStr .= "--------------------------------------------------\n[server config]:\n";
+                        foreach ($this->tarsConfig['tars']['application']['server'] as $key => $value) {
+                            if ($key == "adapters") {
+                                continue;
+                            }
+                            $returnStr .= "$key      " . $value;
+                            $returnStr .= "\n";
+                        }
+
+                        foreach ($this->tarsConfig['tars']['application']['server']['adapters'] as $adapter) {
+                            $returnStr .= "--------------------------------------------------\n";
+                            foreach ($adapter as $key => $value) {
+                                $returnStr .= "$key      " . $value;
+                                $returnStr .= "\n";
+                            }
+                        }
+                        $returnStr .= "--------------------------------------------------\n";
+                    } // 加载服务配置
+                    else {
+                        if (strstr($cmd, "tars.loadconfig")) {
+                            // 这个事,最好是起一个task worker去干比较好
+                            $parts = explode(' ', $cmd);
+                            $fileName = $parts[1];
+
+                            $config = new \Tars\client\CommunicatorConfig();
+                            $locator = $this->tarsConfig['tars']['application']['client']['locator'];
+                            $moduleName = $this->tarsConfig['tars']['application']['client']['modulename'];
+                            $config->setLocator($locator);
+                            $config->setModuleName($moduleName);
+                            $config->setSocketMode(2);
+                            $configF = new ConfigServant($config);
+                            $configContent = '';
+                            $configF->loadConfig($app, $server, $fileName, $configContent);
+
+                            $basePath = $this->tarsConfig['tars']['application']['server']['basepath'];
+                            file_put_contents($basePath . '/src/conf/' . $fileName, $configContent);
+
+                            $returnStr = '[notify file num:1][located in {ServicePath}/bin/conf]';
+                        }
                     }
-                    $returnStr .= "--------------------------------------------------\n";
+
+                    $str = \TUPAPI::putString(0, $returnStr, 1);
+                    $cPacketType = 0;
+                    $iMessageType = 0;
+
+                    $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
+                        $iMessageType, $iRequestId, 0, '', [$str], []);
+                    $response->send($rspBuf);
+
+                    return null;
                 }
-                // 加载服务配置
-                else if(strstr($cmd,"tars.loadconfig"))
-                {
-                    // 这个事,最好是起一个task worker去干比较好
-                    $parts = explode(' ', $cmd);
-                    $fileName = $parts[1];
-
-                    $config = new \Tars\client\CommunicatorConfig();
-                    $locator = $this->tarsConfig['tars']['application']['client']['locator'];
-                    $moduleName = $this->tarsConfig['tars']['application']['client']['modulename'];
-                    $config->setLocator($locator);
-                    $config->setModuleName($moduleName);
-                    $config->setSocketMode(2);
-                    $configF = new ConfigServant($config);
-                    $configContent = '';
-                    $configF->loadConfig($app, $server, $fileName, $configContent);
-
-                    $basePath = $this->tarsConfig['tars']['application']['server']['basepath'];
-                    file_put_contents($basePath.'/src/conf/'.$fileName, $configContent);
-
-                    $returnStr = '[notify file num:1][located in {ServicePath}/bin/conf]';
-                }
-
-                $str = \TUPAPI::putString(0,$returnStr,1);
-                $cPacketType = 0;
-                $iMessageType = 0;
-
-                $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
-                    $iMessageType, $iRequestId, 0, '', [$str], []);
-                $response->send($rspBuf);
-
-                return null;
-            }
         }
     }
 }

@@ -29,6 +29,7 @@ class JSONProtocol
             ], JSON_UNESCAPED_UNICODE
         );
     }
+
     public function parseAnnotation($docblock)
     {
     }

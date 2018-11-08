@@ -33,8 +33,15 @@ class Response
         $this->resource->status($http_status_code);
     }
 
-    public function cookie($key, $value = '', $expire = 0, $path = '/', $domain = '', $secure = false, $httponly = false)
-    {
+    public function cookie(
+        $key,
+        $value = '',
+        $expire = 0,
+        $path = '/',
+        $domain = '',
+        $secure = false,
+        $httponly = false
+    ) {
         $this->resource->cookie($key, $value, $expire, $path, $domain, $secure, $httponly);
     }
 

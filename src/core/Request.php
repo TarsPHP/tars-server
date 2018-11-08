@@ -28,6 +28,7 @@ class Request
             $_SERVER = $this->server;
         }
     }
+
     public function unsetGlobal()
     {
         $_SERVER = array();

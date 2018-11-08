@@ -29,13 +29,13 @@ class CommandBase
      */
     public function getProcess($processName)
     {
-        $cmd = "ps aux | grep '".$processName."' | grep master | grep -v grep  | awk '{ print $2}'";
+        $cmd = "ps aux | grep '" . $processName . "' | grep master | grep -v grep  | awk '{ print $2}'";
         exec($cmd, $ret);
 
-        $cmd = "ps aux | grep '".$processName."' | grep manager | grep -v grep  | awk '{ print $2}'";
+        $cmd = "ps aux | grep '" . $processName . "' | grep manager | grep -v grep  | awk '{ print $2}'";
         exec($cmd, $ret);
 
-        $cmd = "ps aux | grep '".$processName."' | grep worker | grep -v grep  | awk '{ print $2}'";
+        $cmd = "ps aux | grep '" . $processName . "' | grep worker | grep -v grep  | awk '{ print $2}'";
         exec($cmd, $ret);
 
         if (empty($ret)) {

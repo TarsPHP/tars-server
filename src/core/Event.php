@@ -73,7 +73,7 @@ class Event
     }
 
     /**
-     * @param Request  $request
+     * @param Request $request
      * @param Response $response
      *                           针对http进行处理
      */
@@ -89,10 +89,10 @@ class Event
 
         $route = $this->protocol->route($request, $response);
         if (!$route) {
-            $class = $namespaceName.'controller\IndexController';
+            $class = $namespaceName . 'controller\IndexController';
             $fun = 'actionIndex';
         } else {
-            $class = $namespaceName.'controller\\'.$route['class'];
+            $class = $namespaceName . 'controller\\' . $route['class'];
             $fun = $route['action'];
         }
 

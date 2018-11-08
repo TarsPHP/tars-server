@@ -26,21 +26,18 @@ class Start extends CommandBase
 
         //检查必须的服务名是否存在
         if (empty($tarsConfig['tars']['application']['server']['app'])
-            || empty($tarsConfig['tars']['application']['server']['server']))
-        {
-            echo 'AppName or ServerName empty! Please check config!'.PHP_EOL;
+            || empty($tarsConfig['tars']['application']['server']['server'])) {
+            echo 'AppName or ServerName empty! Please check config!' . PHP_EOL;
             exit;
         }
 
         // 检查一下业务必须的配置是否存在
         $basePath = $tarsConfig['tars']['application']['server']['basepath'];
 
-        $servicesInfo = require $basePath.'src/services.php';
-        if ($tarsConfig['tars']['application']['server']['servType'] === 'tcp')
-        {
-            if (!isset($servicesInfo['home-class']) || !isset($servicesInfo['home-api']))
-            {
-                echo 'home-class or home-api not exist, please chech services.php!'.PHP_EOL;
+        $servicesInfo = require $basePath . 'src/services.php';
+        if ($tarsConfig['tars']['application']['server']['servType'] === 'tcp') {
+            if (!isset($servicesInfo['home-class']) || !isset($servicesInfo['home-api'])) {
+                echo 'home-class or home-api not exist, please chech services.php!' . PHP_EOL;
                 exit;
             }
             $tarsConfig['tars']['application']['server']['servicesInfo'] = $servicesInfo;
@@ -49,11 +46,10 @@ class Start extends CommandBase
         }
 
         $name = $tarsConfig['tars']['application']['server']['app']
-            .'.'.$tarsConfig['tars']['application']['server']['server'];
+            . '.' . $tarsConfig['tars']['application']['server']['server'];
         $ret = $this->getProcess($name);
-        if ($ret['exist'] === true)
-        {
-            echo "{$name} start  \033[34;40m [FAIL] \033[0m process already exists".PHP_EOL;
+        if ($ret['exist'] === true) {
+            echo "{$name} start  \033[34;40m [FAIL] \033[0m process already exists" . PHP_EOL;
             exit;
         }
 
@@ -67,7 +63,7 @@ class Start extends CommandBase
         StatFWrapper::initStoreCache($storeCache);
 
         //创建成功
-        echo "{$name} start  \033[32;40m [SUCCESS] \033[0m".PHP_EOL;
+        echo "{$name} start  \033[32;40m [SUCCESS] \033[0m" . PHP_EOL;
 
         $server->start();
     }

@@ -20,6 +20,7 @@ class HTTPProtocol implements Protocol
     public function packErrRsp($unpackResult, $code, $msg)
     {
     }
+
     public function route(\Tars\core\Request $request, \Tars\core\Response $response, $tarsConfig = [])  //默认为
     {
         $uri = $request->data['server']['request_uri'];
@@ -28,8 +29,8 @@ class HTTPProtocol implements Protocol
 
         // 这里的大小写和autoload需要确定一个规则
         return [
-            'class' => ucwords($list[1]).'Controller',
-            'action' => 'action'.ucwords($list[2]),
+            'class' => ucwords($list[1]) . 'Controller',
+            'action' => 'action' . ucwords($list[2]),
         ];
     }
 

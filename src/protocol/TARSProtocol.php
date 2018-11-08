@@ -80,8 +80,7 @@ class TARSProtocol implements Protocol
         $packMethod = $packMethods[$type];
         if ($iVersion === 3) {
             $buf = $packMethod($name, $argv, $iVersion);
-        }
-        // jce类型是用tag进行区分的
+        } // jce类型是用tag进行区分的
         else {
             $buf = $packMethod($tag, $argv, $iVersion);
         }
@@ -228,20 +227,18 @@ class TARSProtocol implements Protocol
                         'name' => trim($parts[2], '$'),
                         'tag' => $index,
                     ];
-                }
-                // 输入参数
+                } // 输入参数
                 else {
                     $parts = explode(' ', $validLine);
 
                     $inParams[] = [
                         'type' => $parts[1],
-                        'proto' => isset($parts[3])?$parts[3]:'',
+                        'proto' => isset($parts[3]) ? $parts[3] : '',
                         'name' => trim($parts[2], '$'),
                         'tag' => $index,
                     ];
                 }
-            }
-            // 说明是返回类型
+            } // 说明是返回类型
             else {
                 $parts = explode(' ', $validLine);
 
@@ -312,13 +309,11 @@ class TARSProtocol implements Protocol
                         $value = $unpackMethod($inParam['name'], $proto, $sBuffer, false, $iVersion);
                         $this->fromArray($value, $proto);
                         $value = $proto;
-                    }
-                    // 基本类型
+                    } // 基本类型
                     else {
                         $value = $unpackMethod($inParam['name'], $sBuffer, false, $iVersion);
                     }
-                }
-                // jce类型是用tag进行区分的
+                } // jce类型是用tag进行区分的
                 else {
                     // 需要判断是否是简单类型,还是vector或map或struct
                     if ($type === 'map' || $type === 'vector') {
@@ -332,8 +327,7 @@ class TARSProtocol implements Protocol
                         $value = $unpackMethod($inParam['tag'], $proto, $sBuffer, false, $iVersion);
                         $this->fromArray($value, $proto);
                         $value = $proto;
-                    }
-                    // 基本类型
+                    } // 基本类型
                     else {
                         $value = $unpackMethod($inParam['tag'], $sBuffer, false, $iVersion);
                     }
@@ -350,7 +344,7 @@ class TARSProtocol implements Protocol
                 ++$index;
                 $type = $outParam['type'];
 
-                $protoName = 'proto'.$index;
+                $protoName = 'proto' . $index;
 
                 // 如果是结构体
                 if ($type === 'map' || $type === 'vector') {
@@ -447,13 +441,14 @@ class TARSProtocol implements Protocol
 
         return $basicTypes[$type];
     }
+
     // 将数组转换成对象
     private function fromArray($data, &$structObj)
     {
         if (!empty($data)) {
             foreach ($data as $key => $value) {
-                if (method_exists($structObj, 'set'.ucfirst($key))) {
-                    call_user_func_array([$this, 'set'.ucfirst($key)], [$value]);
+                if (method_exists($structObj, 'set' . ucfirst($key))) {
+                    call_user_func_array([$this, 'set' . ucfirst($key)], [$value]);
                 } elseif ($structObj->$key instanceof \TARS_Struct) {
                     $this->fromArray($value, $structObj->$key);
                 } else {
