@@ -302,6 +302,7 @@ class Server
                     \swoole_timer_tick($reportInterval, function () use ($locator, $application, $serverName) {
                         try {
                             $localIP = swoole_get_local_ip();
+                            $ip = isset($localIP['eth0']) ? $localIP['eth0'] : '127.0.0.1';
                             $msgHeadArr = [];
                             $msgBodyArr = [];
 
@@ -310,7 +311,7 @@ class Server
                             preg_match_all("/\d+/s", $sysMemInfo[2], $matches);
                             if (isset($matches[0][0])) {
                                 $msgHead = [
-                                    'ip' => $localIP['eth1'],
+                                    'ip' => $ip,
                                     'propertyName' => 'system.memoryUsage'
                                 ];
                                 $msgBody = [
@@ -325,7 +326,7 @@ class Server
                                 $serverMemInfo);
                             if (isset($serverMemInfo)) {
                                 $msgHead = [
-                                    'ip' => $localIP['eth1'],
+                                    'ip' => $ip,
                                     'propertyName' => $serverName . '.memoryUsage'
                                 ];
                                 $msgBody = [
@@ -341,7 +342,7 @@ class Server
                                 foreach ($cpusInfo as $key => $cpuInfo) {
                                     $cpuUsage = 100 - $cpuInfo;
                                     $msgHead = [
-                                        'ip' => $localIP['eth1'],
+                                        'ip' => $ip,
                                         'propertyName' => "system.cpu{$key}Usage"
                                     ];
                                     $msgBody = [
@@ -357,7 +358,7 @@ class Server
                                 $swooleWorkerNum);
                             if (isset($swooleWorkerNum)) {
                                 $msgHead = [
-                                    'ip' => $localIP['eth1'],
+                                    'ip' => $ip,
                                     'propertyName' => $serverName . '.swooleWorkerNum'
                                 ];
                                 $msgBody = [
@@ -379,7 +380,7 @@ class Server
                             foreach ($netStatInfo as $statInfo) {
                                 $statArr = explode(' ', trim($statInfo));
                                 $msgHead = [
-                                    'ip' => $localIP['eth1'],
+                                    'ip' => $ip,
                                     'propertyName' => $serverName . '.netStat.' . $statArr[1]
                                 ];
                                 $msgBody = [
