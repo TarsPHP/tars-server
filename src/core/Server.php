@@ -265,22 +265,31 @@ class Server
                         $timeout,
                         $objName
                     ) {
-                        // 进行一次上报
-                        $serverInfo = new ServerInfo();
-                        $serverInfo->adapter = $adapter;
-                        $serverInfo->application = $application;
-                        $serverInfo->serverName = $serverName;
-                        $serverInfo->pid = $masterPid;
+                        //获取当前存活的worker数目
+                        $processName = $application.'.'.$serverName;
+                        $cmd = "ps aux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
+                        exec($cmd, $ret);
+                        $workerNum = count($ret);
+                        if( $workerNum<1 ){
+                            //worker全挂，不上报存活 等tars重启
+                        }else{
+                            // 进行一次上报
+                            $serverInfo = new ServerInfo();
+                            $serverInfo->adapter = $adapter;
+                            $serverInfo->application = $application;
+                            $serverInfo->serverName = $serverName;
+                            $serverInfo->pid = $masterPid;
 
-                        $serverF = new ServerFSync($host, $port, $objName);
-                        $serverF->keepAlive($serverInfo);
+                            $serverF = new ServerFSync($host, $port, $objName);
+                            $serverF->keepAlive($serverInfo);
 
-                        $adminServerInfo = new ServerInfo();
-                        $adminServerInfo->adapter = 'AdminAdapter';
-                        $adminServerInfo->application = $application;
-                        $adminServerInfo->serverName = $serverName;
-                        $adminServerInfo->pid = $masterPid;
-                        $serverF->keepAlive($adminServerInfo);
+                            $adminServerInfo = new ServerInfo();
+                            $adminServerInfo->adapter = 'AdminAdapter';
+                            $adminServerInfo->application = $application;
+                            $adminServerInfo->serverName = $serverName;
+                            $adminServerInfo->pid = $masterPid;
+                            $serverF->keepAlive($adminServerInfo);
+                        }
                     });
 
                     //主调定时上报
