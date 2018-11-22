@@ -310,97 +310,7 @@ class Server
 
                     \swoole_timer_tick($reportInterval, function () use ($locator, $application, $serverName) {
                         try {
-                            $localIP = swoole_get_local_ip();
-                            $ip = isset($localIP['eth0']) ? $localIP['eth0'] : '127.0.0.1';
-                            $msgHeadArr = [];
-                            $msgBodyArr = [];
-
-                            //系统内存使用情况
-                            exec("free -m", $sysMemInfo);
-                            preg_match_all("/\d+/s", $sysMemInfo[2], $matches);
-                            if (isset($matches[0][0])) {
-                                $msgHead = [
-                                    'ip' => $ip,
-                                    'propertyName' => 'system.memoryUsage'
-                                ];
-                                $msgBody = [
-                                    'policy' => 'Avg',
-                                    'value' => $matches[0][0]
-                                ];
-                                $msgHeadArr[] = $msgHead;
-                                $msgBodyArr[] = $msgBody;
-                            }
-                            //服务内存使用情况
-                            exec("ps -e -o 'rsz,cmd' | grep {$serverName} | grep -v grep | awk '{count += $1}; END {print count}'",
-                                $serverMemInfo);
-                            if (isset($serverMemInfo)) {
-                                $msgHead = [
-                                    'ip' => $ip,
-                                    'propertyName' => $serverName . '.memoryUsage'
-                                ];
-                                $msgBody = [
-                                    'policy' => 'Avg',
-                                    'value' => $serverMemInfo[0]
-                                ];
-                                $msgHeadArr[] = $msgHead;
-                                $msgBodyArr[] = $msgBody;
-                            }
-                            //系统cpu使用情况
-                            exec("mpstat -P ALL | awk '{if($12!=\"\") print $12}' | tail -n +3", $cpusInfo);
-                            if (isset($cpusInfo)) {
-                                foreach ($cpusInfo as $key => $cpuInfo) {
-                                    $cpuUsage = 100 - $cpuInfo;
-                                    $msgHead = [
-                                        'ip' => $ip,
-                                        'propertyName' => "system.cpu{$key}Usage"
-                                    ];
-                                    $msgBody = [
-                                        'policy' => 'Avg',
-                                        'value' => $cpuUsage
-                                    ];
-                                    $msgHeadArr[] = $msgHead;
-                                    $msgBodyArr[] = $msgBody;
-                                }
-                            }
-                            //swoole特性
-                            exec("ps aux | grep {$serverName} | grep 'event worker process' | grep -v grep | wc -l",
-                                $swooleWorkerNum);
-                            if (isset($swooleWorkerNum)) {
-                                $msgHead = [
-                                    'ip' => $ip,
-                                    'propertyName' => $serverName . '.swooleWorkerNum'
-                                ];
-                                $msgBody = [
-                                    'policy' => 'Avg',
-                                    'value' => $swooleWorkerNum[0]
-                                ];
-                                $msgHeadArr[] = $msgHead;
-                                $msgBodyArr[] = $msgBody;
-                            }
-                            //连接数
-                            exec("ps -ef | grep {$serverName} | grep -v grep | awk '{print $2}'", $serverPidInfo);
-                            $tmpId = [];
-                            foreach ($serverPidInfo as $pid) {
-                                $tmpId[] = $pid . "/";
-                            }
-                            $grepPidInfo = implode("|", $tmpId);
-                            $command = "netstat -anlp | grep tcp | grep -E '{$grepPidInfo}' | awk '{print $6}' | awk -F: '{print $1}'|sort|uniq -c|sort -nr";
-                            exec($command, $netStatInfo);
-                            foreach ($netStatInfo as $statInfo) {
-                                $statArr = explode(' ', trim($statInfo));
-                                $msgHead = [
-                                    'ip' => $ip,
-                                    'propertyName' => $serverName . '.netStat.' . $statArr[1]
-                                ];
-                                $msgBody = [
-                                    'policy' => 'Avg',
-                                    'value' => $statArr[0]
-                                ];
-                                $msgHeadArr[] = $msgHead;
-                                $msgBodyArr[] = $msgBody;
-                            }
-                            $propertyFWrapper = new PropertyFWrapper($locator, 2, $application . '.' . $serverName);
-                            $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
+                            $this->basePropertyMonitor($locator, $application, $serverName);
                         } catch (\Exception $exception) {
                             var_dump((string)$exception);
                         }
@@ -565,6 +475,105 @@ class Server
         $serverF->keepAlive($serverInfo);
         $serverInfo->adapter = 'AdminAdapter';
         $serverF->keepAlive($serverInfo);
+    }
+
+    //基础特性上报，上报：内存/cpu使用情况，worker进程数，连接数
+    public function basePropertyMonitor($locator, $application, $serverName)
+    {
+        $localIP = swoole_get_local_ip();
+        $ip = isset($localIP['eth0'])
+            ? $localIP['eth0']
+            : (isset(array_values($localIP)[0]) ? array_values($localIP)[0] : '127.0.0.1');
+        $msgHeadArr = [];
+        $msgBodyArr = [];
+
+        //系统内存使用情况
+        exec("free -m", $sysMemInfo);
+        preg_match_all("/\d+/s", $sysMemInfo[2], $matches);
+        if (isset($matches[0][0])) {
+            $msgHead = [
+                'ip' => $ip,
+                'propertyName' => 'system.memoryUsage'
+            ];
+            $msgBody = [
+                'policy' => 'Avg',
+                'value' => $matches[0][0]
+            ];
+            $msgHeadArr[] = $msgHead;
+            $msgBodyArr[] = $msgBody;
+        }
+        //服务内存使用情况
+        exec("ps -e -o 'rsz,cmd' | grep {$serverName} | grep -v grep | awk '{count += $1}; END {print count}'",
+            $serverMemInfo);
+        if (isset($serverMemInfo)) {
+            $msgHead = [
+                'ip' => $ip,
+                'propertyName' => $serverName . '.memoryUsage'
+            ];
+            $msgBody = [
+                'policy' => 'Avg',
+                'value' => $serverMemInfo[0]
+            ];
+            $msgHeadArr[] = $msgHead;
+            $msgBodyArr[] = $msgBody;
+        }
+        //系统cpu使用情况
+        exec("command -v mpstat > /dev/null && mpstat -P ALL | awk '{if($12!=\"\") print $12}' | tail -n +3",
+            $cpusInfo);
+        if (isset($cpusInfo)) {
+            foreach ($cpusInfo as $key => $cpuInfo) {
+                $cpuUsage = 100 - $cpuInfo;
+                $msgHead = [
+                    'ip' => $ip,
+                    'propertyName' => "system.cpu{$key}Usage"
+                ];
+                $msgBody = [
+                    'policy' => 'Avg',
+                    'value' => $cpuUsage
+                ];
+                $msgHeadArr[] = $msgHead;
+                $msgBodyArr[] = $msgBody;
+            }
+        }
+        //swoole特性
+        exec("ps aux | grep {$serverName} | grep 'event worker process' | grep -v grep | wc -l",
+            $swooleWorkerNum);
+        if (isset($swooleWorkerNum)) {
+            $msgHead = [
+                'ip' => $ip,
+                'propertyName' => $serverName . '.swooleWorkerNum'
+            ];
+            $msgBody = [
+                'policy' => 'Avg',
+                'value' => $swooleWorkerNum[0]
+            ];
+            $msgHeadArr[] = $msgHead;
+            $msgBodyArr[] = $msgBody;
+        }
+        //连接数
+        exec("ps -ef | grep {$serverName} | grep -v grep | awk '{print $2}'", $serverPidInfo);
+        $tmpId = [];
+        foreach ($serverPidInfo as $pid) {
+            $tmpId[] = $pid . "/";
+        }
+        $grepPidInfo = implode("|", $tmpId);
+        $command = "command -v netstat > /dev/null && netstat -anlp | grep tcp | grep -E '{$grepPidInfo}' | awk '{print $6}' | awk -F: '{print $1}'|sort|uniq -c|sort -nr";
+        exec($command, $netStatInfo);
+        foreach ($netStatInfo as $statInfo) {
+            $statArr = explode(' ', trim($statInfo));
+            $msgHead = [
+                'ip' => $ip,
+                'propertyName' => $serverName . '.netStat.' . $statArr[1]
+            ];
+            $msgBody = [
+                'policy' => 'Avg',
+                'value' => $statArr[0]
+            ];
+            $msgHeadArr[] = $msgHead;
+            $msgBodyArr[] = $msgBody;
+        }
+        $propertyFWrapper = new PropertyFWrapper($locator, 2, $application . '.' . $serverName);
+        $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
     }
 
     private function processAdmin($unpackResult, $sFuncName, $response)
