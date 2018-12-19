@@ -267,7 +267,7 @@ class Server
                     ) {
                         //获取当前存活的worker数目
                         $processName = $application.'.'.$serverName;
-                        $cmd = "ps aux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
+                        $cmd = "ps wwaux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
                         exec($cmd, $ret);
                         $workerNum = count($ret);
                         if( $workerNum<1 ){
@@ -503,7 +503,7 @@ class Server
             $msgBodyArr[] = $msgBody;
         }
         //服务内存使用情况
-        exec("ps -e -o 'rsz,cmd' | grep {$serverName} | grep -v grep | awk '{count += $1}; END {print count}'",
+        exec("ps -e -ww -o 'rsz,cmd' | grep {$serverName} | grep -v grep | awk '{count += $1}; END {print count}'",
             $serverMemInfo);
         if (isset($serverMemInfo)) {
             $msgHead = [
@@ -536,7 +536,7 @@ class Server
             }
         }
         //swoole特性
-        exec("ps aux | grep {$serverName} | grep 'event worker process' | grep -v grep | wc -l",
+        exec("ps wwaux | grep {$serverName} | grep 'event worker process' | grep -v grep | wc -l",
             $swooleWorkerNum);
         if (isset($swooleWorkerNum)) {
             $msgHead = [
@@ -551,7 +551,7 @@ class Server
             $msgBodyArr[] = $msgBody;
         }
         //连接数
-        exec("ps -ef | grep {$serverName} | grep -v grep | awk '{print $2}'", $serverPidInfo);
+        exec("ps -ef -ww | grep {$serverName} | grep -v grep | awk '{print $2}'", $serverPidInfo);
         $tmpId = [];
         foreach ($serverPidInfo as $pid) {
             $tmpId[] = $pid . "/";
