@@ -10,6 +10,11 @@ namespace Tars;
 
 class Consts
 {
+    const SWOOLE_SOCKET_MODE = 1;
+    const SWOOLE_SYNC_MODE = 2;
+    const SWOOLE_COROUTINE_MODE = 3;
+
+
     const TARSVERSION = 0x01;
     const TUPVERSION = 0x03;
 

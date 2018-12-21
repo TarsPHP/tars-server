@@ -30,7 +30,8 @@ class Stop extends CommandBase
             '.' . $tarsConfig['tars']['application']['server']['server'];
         $ret = $this->getProcess($name);
         if ($ret['exist'] === false) {
-            echo "{$name} stop  \033[34;40m [FAIL] \033[0m process not exists" . PHP_EOL;
+            echo "{$name} stop  \033[34;40m [FAIL] \033[0m process not exists"
+                . PHP_EOL;
 
             return;
         }
@@ -40,7 +41,8 @@ class Stop extends CommandBase
         exec($cmd, $output, $r);
 
         if ($r === false) { // kill失败时
-            echo "{$name} stop  \033[34;40m [FAIL] \033[0m posix exec fail" . PHP_EOL;
+            echo "{$name} stop  \033[34;40m [FAIL] \033[0m posix exec fail"
+                . PHP_EOL;
             exit;
         }
 
