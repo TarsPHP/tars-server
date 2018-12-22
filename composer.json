@@ -1,7 +1,7 @@
 {
     "name": "phptars/tars-server",
     "description": "tars的php框架",
-    "version":"develop",
+    "version":"0.2.0",
     "authors": [
         {
             "name": "Chen Liang",
@@ -18,7 +18,7 @@
         "phptars/tars-client": "~0.1",
         "phptars/tars-report": "~0.1",
         "phptars/tars-config": "~0.1",
-        "phptars/tars-monitor": "^0.1.7"
+        "phptars/tars-monitor": "~0.2"
     },
     "autoload": {
         "psr-4": {
