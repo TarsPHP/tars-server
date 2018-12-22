@@ -46,6 +46,28 @@ class App
     public static $configF;
 
     /**
+     * 日志对象
+     * @var \Monolog\Logger
+     */
+    public static $logger;
+
+    /**
+     * @return \Monolog\Logger
+     */
+    public static function getLogger()
+    {
+        return self::$logger;
+    }
+
+    /**
+     * @param \Monolog\Logger $logger
+     */
+    public static function setLogger($logger)
+    {
+        self::$logger = $logger;
+    }
+
+    /**
      * @return ConfigWrapper
      */
     public static function getConfigF()

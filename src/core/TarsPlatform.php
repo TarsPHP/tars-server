@@ -43,7 +43,6 @@ class TarsPlatform
     public static function loadTarsConfig($tarsConfig, $saveTarsConfigFileDir, $saveTarsConfigFileName)
     {
         $tarsServerConf = $tarsConfig['tars']['application']['server'];
-        $tarsClientConf = $tarsConfig['tars']['application']['client'];
 
         $fileNameArr = array_filter($saveTarsConfigFileName);
 
@@ -51,16 +50,7 @@ class TarsPlatform
         $serverName = $tarsServerConf['server'];
 
         if (!empty($fileNameArr) && $application != '' && $serverName != '') {
-
-            $config = new \Tars\client\CommunicatorConfig();
-            $locator = $tarsClientConf['locator'];
-            $moduleName = $tarsClientConf['modulename'];
-
-            $config->setLocator($locator);
-            $config->setModuleName($moduleName);
-            $config->setSocketMode(Consts::SWOOLE_SYNC_MODE);
-
-            $configServant = new \Tars\config\ConfigServant($config);
+            $configServant = App::getConfigF();
 
             foreach ($fileNameArr as $filename) {
                 $savefile = $filename;
@@ -208,7 +198,7 @@ class TarsPlatform
             $msgHeadArr[] = $msgHead;
             $msgBodyArr[] = $msgBody;
         }
-        $propertyFWrapper = new \Tars\monitor\PropertyFWrapper($locator, 2, $application . '.' . $serverName);
+        $propertyFWrapper = App::getPropertyF();
         $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
     }
 
@@ -270,15 +260,8 @@ class TarsPlatform
                         $parts = explode(' ', $cmd);
                         $fileName = $parts[1];
 
-                        $config = new \Tars\client\CommunicatorConfig();
-                        $locator = $tarsClientConf['locator'];
-                        $moduleName = $tarsClientConf['modulename'];
 
-                        $config->setLocator($locator);
-                        $config->setModuleName($moduleName);
-                        $config->setSocketMode(\Tars\Consts::SWOOLE_SYNC_MODE);
-
-                        $configF = new \Tars\config\ConfigServant($config);
+                        $configF = App::getConfigF();
                         $configContent = '';
                         $configF->loadConfig($application, $serverName, $fileName, $configContent);
 

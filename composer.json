@@ -1,11 +1,11 @@
 {
     "name": "phptars/tars-server",
     "description": "tars的php框架",
-    "version":"0.1.10",
+    "version":"develop",
     "authors": [
         {
             "name": "Chen Liang",
-            "email": "liangchen@yuewen.com"
+            "email": "cedricliang21@gmail.com"
         },
         {
             "name": "Panpan Ding",

@@ -47,7 +47,7 @@ class Server
     protected $protocol;
     protected $timers;
 
-    public function __construct($conf, $table = null)
+    public function __construct($conf)
     {
         $this->tarsServerConfig = $conf['tars']['application']['server'];
         $this->tarsClientConfig = $conf['tars']['application']['client'];
@@ -65,7 +65,6 @@ class Server
 
         $this->protocolName = $this->tarsServerConfig['protocolName'];
         $this->servType = $this->tarsServerConfig['servType'];
-        $this->table = $table;
         $this->worker_num = $this->setting['worker_num'];
     }
 
@@ -76,6 +75,28 @@ class Server
         $locator = $this->tarsClientConfig['locator'];
         $moduleName = $this->application . '.' . $this->serverName;
 
+
+        // 日志组件初始化 根据平台配置的level来
+        $logLevel = $this->setting['log_level'];
+
+        $logger = new \Monolog\Logger("tars_logger");
+
+        $levelMap = [
+            'DEBUG' => \Monolog\Logger::DEBUG,
+            'INFO' => \Monolog\Logger::INFO,
+            'NOTICE' => \Monolog\Logger::NOTICE,
+            'WARNING' => \Monolog\Logger::WARNING,
+            'ERROR' => \Monolog\Logger::ERROR,
+            'CRITICAL' => \Monolog\Logger::CRITICAL,
+        ];
+        $loggerLevel = $levelMap[$logLevel];
+
+        $outStreamHandler = new \Monolog\Handler\StreamHandler(
+            $this->setting['log_file'], $loggerLevel);
+
+        $logger->pushHandler($outStreamHandler);
+
+        $logger->info("stat/property/keepalive/config/logger service init start...\n");
         // 初始化被调上报
         $statF = new StatFServer($locator, Consts::SWOOLE_SYNC_MODE,
             $statServantName, $moduleName,
@@ -107,23 +128,15 @@ class Server
         // 配置拉取初始化
         $configF = new ConfigWrapper($this->tarsClientConfig);
 
-        // 日志组件初始化 todo 根据平台配置的level来
-        $logger = new \Monolog\Logger("tars_logger");
-        $outStreamHandler = new \Monolog\Handler\StreamHandler(
-            $this->setting['log_path'] . "/stdout.log");
-
-
-
-        $logger->pushHandler($outStreamHandler);
-
-
         // 初始化
         App::setTarsConfig($this->tarsConfig);
         App::setStatF($statF);
         App::setPropertyF($propertyF);
         App::setServerF($serverF);
         App::setConfigF($configF);
+        App::setLogger($logger);
 
+        $logger->info("stat/property/keepalive/config/logger service init finish...\n");
 
         switch ($this->servType) {
             case 'http' : {
@@ -149,6 +162,7 @@ class Server
 
             // 判断是否是timer服务
             if (isset($this->tarsServerConfig['isTimer']) && $this->tarsServerConfig['isTimer'] == true) {
+                $logger->info("Server type timer...\n");
 
                 $timerDir = $this->tarsServerConfig['basepath'] . 'src/timer/';
 
@@ -161,13 +175,20 @@ class Server
                         }
                     }
                 } else {
-                    error_log(__METHOD__ .' Timer directory is missing');
+                    $logger->error(__METHOD__ .' Timer directory is missing\n');
                 }
+            }
+            else {
+                $logger->info("Server type http...\n");
             }
         }
         else if($this->servType == 'websocket') {
+            $logger->info("Server type websocket...\n");
             $this->sw->on('Request', array($this, 'onRequest'));
             $this->sw->on('Message', array($this, 'onMessage'));
+        }
+        else {
+            $logger->info("Server type tcp...\n");
         }
 
         $this->sw->set($this->setting);
@@ -182,11 +203,6 @@ class Server
 
         $this->sw->on('Task', array($this, 'onTask'));
         $this->sw->on('Finish', array($this, 'onFinish'));
-
-        // todo 之后去掉
-        if (!is_null($this->table)) {
-            $this->sw->table = $this->table;
-        }
 
         $this->masterPidFile = $this->tarsServerConfig['datapath'] . '/master.pid';
         $this->managerPidFile = $this->tarsServerConfig['datapath'] . '/manager.pid';
@@ -319,7 +335,7 @@ class Server
                             $funcName = 'execute';
                             $obj->$funcName();
                         } catch (\Exception $e) {
-                            error_log(__METHOD__ ." Error in runnable: $runnable, worker id: $workerId, e: " . print_r($e, true));
+                            App::getLogger()->error(__METHOD__ ." Error in runnable: $runnable, worker id: $workerId, e: " . print_r($e, true));
                         }
                     });
                 }
@@ -349,7 +365,7 @@ class Server
                     }
                     //worker全挂，不上报存活 等tars重启
                     else {
-                        error_log(__METHOD__ . " All workers are not alive any more.");
+                        App::getLogger()->error(__METHOD__ . " All workers are not alive any more.");
                     }
                 });
 
@@ -365,7 +381,7 @@ class Server
                             $statF = App::getStatF();
                             $statF->sendStat();
                         } catch (\Exception $e) {
-                            error_log((string)$e);
+                            App::getLogger()->error((string)$e);
                         }
                     });
 
@@ -375,7 +391,7 @@ class Server
                         try {
                             TarsPlatform::basePropertyMonitor($locator, $application, $serverName);
                         } catch (\Exception $exception) {
-                            error_log((string)$exception);
+                            App::getLogger()->error((string)$exception);
                         }
                 });
                 break;
@@ -388,19 +404,17 @@ class Server
     // 这里应该找到对应的解码协议类型,执行解码,并在收到逻辑处理回复后,进行编码和发送数据
     public function onReceive($server, $fd, $fromId, $data)
     {
-        $request = new Request();
-        $request->reqBuf = $data;
-        $request->paramInfos = self::$paramInfos;
-        $request->impl = self::$impl;
+        $req = new Request();
+        $req->reqBuf = $data;
+        $req->paramInfos = self::$paramInfos;
+        $req->impl = self::$impl;
 
         // 把全局对象带入到请求中,在多个worker之间共享
-        $request->server = $this->sw;
-        $request->setGlobal();
-
-        $response = new Response();
-        $response->fd = $fd;
-        $response->fromFd = $fromId;
-        $response->server = $server;
+        $req->server = $this->sw;
+        $resp = new Response();
+        $resp->fd = $fd;
+        $resp->fromFd = $fromId;
+        $resp->server = $server;
 
 
         // 处理管理端口的特殊逻辑
@@ -410,7 +424,7 @@ class Server
 
         // 处理管理端口相关的逻辑
         if ($sServantName === 'AdminObj') {
-            TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $response, $this->sw->master_pid);
+            TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $resp, $this->sw->master_pid);
         }
 
         $event = new Event();
@@ -419,9 +433,7 @@ class Server
         $event->setTarsConfig($this->tarsConfig);
 
         // 预先对impl和paramInfos进行处理,这样可以速度更快
-        $event->onReceive($request, $response);
-
-        $request->unsetGlobal();
+        $event->onReceive($req, $resp);
     }
 
     /**
@@ -444,7 +456,6 @@ class Server
         $req->namespaceName = $this->namespaceName;
 
         $req->server = $this->sw;
-        $req->setGlobal();
 
         $resp = new Response();
         $resp->servType = $this->servType;
@@ -455,7 +466,6 @@ class Server
         $event->setProtocol(ProtocolFactory::getProtocol($this->protocolName));
         $event->onRequest($req, $resp);
 
-        $req->unsetGlobal();
     }
 
     /**
@@ -483,7 +493,7 @@ class Server
         } elseif (function_exists('swoole_set_process_name')) {
             swoole_set_process_name($name);
         } else {
-            error_log(__METHOD__ . ' failed. require cli_set_process_title or swoole_set_process_name.');
+            App::getLogger()->error(__METHOD__ . ' failed. require cli_set_process_title or swoole_set_process_name.');
         }
     }
 }
