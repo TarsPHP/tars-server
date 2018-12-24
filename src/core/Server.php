@@ -77,7 +77,7 @@ class Server
 
 
         // 日志组件初始化 根据平台配置的level来
-        $logLevel = $this->setting['log_level'];
+        $logLevel = $this->tarsServerConfig['loglevel'];
 
         $logger = new \Monolog\Logger("tars_logger");
 
