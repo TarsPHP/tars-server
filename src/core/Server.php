@@ -302,11 +302,7 @@ class Server
         }
 
 
-        // task worker
-        if ($workerId >= $this->worker_num) {
-            $this->_setProcessName($this->application . '.'
-                . $this->serverName . ': task worker process');
-
+        if($workerId == 0) {
             // 将定时上报的任务投递到task worker 0,只需要投递一次
             $this->sw->task(
                 [
@@ -316,6 +312,12 @@ class Server
                     'adapter' => $this->tarsServerConfig['adapters'][0]['adapterName'],
                     'client' => $this->tarsClientConfig
                 ], 0);
+        }
+
+        // task worker
+        if ($workerId >= $this->worker_num) {
+            $this->_setProcessName($this->application . '.'
+                . $this->serverName . ': task worker process');
         }
         else {
             $this->_setProcessName($this->application . '.'
