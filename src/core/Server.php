@@ -119,7 +119,7 @@ class Server
 
         // 初始化服务保活
         // 解析出node上报的配置 tars.tarsnode.ServerObj@tcp -h 127.0.0.1 -p 2345 -t 10000
-        $result = \Tars\Utils::parseNodeInfo($this->tarsServerConf['node']);
+        $result = \Tars\Utils::parseNodeInfo($this->tarsServerConfig['node']);
         $objName = $result['objName'];
         $host = $result['host'];
         $port = $result['port'];

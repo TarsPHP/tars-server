@@ -1,7 +1,7 @@
 {
     "name": "phptars/tars-server",
     "description": "tars的php框架",
-    "version":"develop",
+    "version":"0.2.1",
     "authors": [
         {
             "name": "Chen Liang",
