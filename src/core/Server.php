@@ -101,14 +101,15 @@ class Server
             'CRITICAL' => 'log_critical.log',
         ];
         $loggerLevel = $levelMap[$logLevel];
-        $loggerName = $levelNameMap[$loggerLevel];
+        $loggerName = $levelNameMap[$logLevel];
 
         $outStreamHandler = new \Monolog\Handler\StreamHandler(
             $this->setting['log_file'], $loggerLevel
         );
 
         $levelStreamHandler = new \Monolog\Handler\StreamHandler(
-            $this->tarsServerConfig['logpath'] . $loggerName , $loggerLevel
+            $this->tarsServerConfig['logpath'] . $this->tarsServerConfig['app'].'/'.
+            $this->tarsServerConfig['server'].'/'. $loggerName , $loggerLevel
         );
 
         $logger->pushHandler($outStreamHandler);
