@@ -104,7 +104,7 @@ class TarsPlatform
     }
 
     //基础特性上报，上报：内存/cpu使用情况，worker进程数，连接数
-    public static function basePropertyMonitor($locator, $application, $serverName)
+    public static function basePropertyMonitor($serverName)
     {
         $localIP = swoole_get_local_ip();
         $ip = isset($localIP['eth0'])
@@ -263,11 +263,17 @@ class TarsPlatform
 
                         $configF = App::getConfigF();
                         $configContent = '';
-                        $configF->loadConfig($application, $serverName, $fileName, $configContent);
+                        try {
+                            $configF->loadConfig($application, $serverName, $fileName, $configContent);
 
-                        file_put_contents($tarsServerConf['basepath'] . '/src/conf/' . $fileName, $configContent);
+                            file_put_contents($tarsServerConf['basepath'] . '/src/conf/' . $fileName, $configContent);
 
-                        $returnStr = '[notify file num:1][located in {ServicePath}/bin/conf]';
+                            $returnStr = '[notify file num:1][located in {ServicePath}/bin/conf]';
+                        }
+                        catch (\Exception $e) {
+                            App::getLogger()->error("Load config failed: " . (string) $e);
+                        }
+
                     }
                 }
 

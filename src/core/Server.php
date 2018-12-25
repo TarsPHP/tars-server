@@ -58,7 +58,9 @@ class Server
         $this->application = $this->tarsServerConfig['app'];
         $this->serverName = $this->tarsServerConfig['server'];
 
-        $this->host = $this->tarsServerConfig['listen'][0]['bIp'];
+        $this->host = empty($this->tarsServerConfig['listen'][0]['bIp'])
+            ? $this->tarsServerConfig['listen'][0]['sHost']
+            : $this->tarsServerConfig['listen'][0]['bIp'];
         $this->port = $this->tarsServerConfig['listen'][0]['iPort'];
 
         $this->setting = $this->tarsServerConfig['setting'];
@@ -89,12 +91,29 @@ class Server
             'ERROR' => \Monolog\Logger::ERROR,
             'CRITICAL' => \Monolog\Logger::CRITICAL,
         ];
+
+        $levelNameMap = [
+            'DEBUG' => 'log_debug.log',
+            'INFO' => 'log_info.log',
+            'NOTICE' => 'log_notice.log',
+            'WARNING' => 'log_warning.log',
+            'ERROR' => 'log_error.log',
+            'CRITICAL' => 'log_critical.log',
+        ];
         $loggerLevel = $levelMap[$logLevel];
+        $loggerName = $levelNameMap[$loggerLevel];
 
         $outStreamHandler = new \Monolog\Handler\StreamHandler(
-            $this->setting['log_file'], $loggerLevel);
+            $this->setting['log_file'], $loggerLevel
+        );
+
+        $levelStreamHandler = new \Monolog\Handler\StreamHandler(
+            $this->tarsServerConfig['logpath'] . $loggerName , $loggerLevel
+        );
 
         $logger->pushHandler($outStreamHandler);
+        $logger->pushHandler($levelStreamHandler);
+
 
         $logger->info("stat/property/keepalive/config/logger service init start...\n");
         // 初始化被调上报
@@ -119,7 +138,7 @@ class Server
 
         // 初始化服务保活
         // 解析出node上报的配置 tars.tarsnode.ServerObj@tcp -h 127.0.0.1 -p 2345 -t 10000
-        $result = \Tars\Utils::parseNodeInfo($this->tarsServerConf['node']);
+        $result = \Tars\Utils::parseNodeInfo($this->tarsServerConfig['node']);
         $objName = $result['objName'];
         $host = $result['host'];
         $port = $result['port'];
@@ -391,7 +410,7 @@ class Server
                 \swoole_timer_tick($reportInterval,
                     function () use ($locator, $application, $serverName) {
                         try {
-                            TarsPlatform::basePropertyMonitor($locator, $application, $serverName);
+                            TarsPlatform::basePropertyMonitor($serverName);
                         } catch (\Exception $exception) {
                             App::getLogger()->error((string)$exception);
                         }
