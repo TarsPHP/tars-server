@@ -198,8 +198,13 @@ class TarsPlatform
             $msgHeadArr[] = $msgHead;
             $msgBodyArr[] = $msgBody;
         }
-        $propertyFWrapper = App::getPropertyF();
-        $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
+        try {
+            $propertyFWrapper = App::getPropertyF();
+            $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
+        }
+        catch (\Exception $e) {
+            error_log((string) $e);
+        }
     }
 
     public static function processAdmin($tarsConfig, $unpackResult, $sFuncName, $response, $master_pid)
