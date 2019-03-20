@@ -116,3 +116,9 @@ onRequest方法:
 * phptars/tars-report: 负责服务本身运行状态的上报
 * phptars/tars-config: 负责对于平台上传的配置的拉取
 
+## Changelog
+### v0.2.4(2019-03-20)
+- 按照psr规则格式化代码
+- 修复代码中的bug
+- 支持自定义主控缓存
+- 开放获取swoole对象的方法
