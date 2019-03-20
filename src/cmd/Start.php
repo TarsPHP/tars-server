@@ -8,8 +8,6 @@
 
 namespace Tars\cmd;
 
-use Tars\App;
-use Tars\Conf;
 use Tars\core\Server;
 
 class Start extends CommandBase

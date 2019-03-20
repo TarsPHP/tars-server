@@ -32,9 +32,8 @@ class TarsPlatform
             $serverF->keepAlive($serverInfo);
             $serverInfo->adapter = 'AdminAdapter';
             $serverF->keepAlive($serverInfo);
-        }
-        catch (\Exception $e) {
-            error_log((string) $e);
+        } catch (\Exception $e) {
+            App::getLogger()->error((string)$e);
         }
 
     }
@@ -58,7 +57,7 @@ class TarsPlatform
                     //相对路径转绝对路径
                     $savefile = $tarsServerConf['basepath'] . $saveTarsConfigFileDir . $filename;
                 }
-                try{
+                try {
                     $configStr = '';
                     $configServant->loadConfig($application, $serverName, $filename, $configStr);
                     if ($configStr != '') { //保存文件
@@ -66,15 +65,15 @@ class TarsPlatform
                         fwrite($file, $configStr);
                         fclose($file);
                     }
-                }
-                catch (\Exception $e) {
-                    error_log((string) $e);
+                } catch (\Exception $e) {
+                    App::getLogger()->error((string)$e);
                 }
             }
         }
     }
 
-    public static function keepaliveReport($data) {
+    public static function keepaliveReport($data)
+    {
         $application = $data['application'];
         $serverName = $data['serverName'];
         $masterPid = $data['masterPid'];
@@ -97,9 +96,8 @@ class TarsPlatform
             $adminServerInfo->serverName = $serverName;
             $adminServerInfo->pid = $masterPid;
             $serverF->keepAlive($adminServerInfo);
-        }
-        catch (\Exception $e) {
-            error_log((string)$e);
+        } catch (\Exception $e) {
+            App::getLogger()->error((string)$e);
         }
     }
 
@@ -201,9 +199,8 @@ class TarsPlatform
         try {
             $propertyFWrapper = App::getPropertyF();
             $propertyFWrapper->monitorPropertyBatch($msgHeadArr, $msgBodyArr);
-        }
-        catch (\Exception $e) {
-            error_log((string) $e);
+        } catch (\Exception $e) {
+            App::getLogger()->error((string)$e);
         }
     }
 
@@ -219,80 +216,81 @@ class TarsPlatform
         $iRequestId = $unpackResult['iRequestId'];
         switch ($sFuncName) {
             case 'shutdown':
-            {
-                $cmd = "kill -15 " . $master_pid;
-                exec($cmd, $output, $r);
-                break;
-            }
-            case 'notify':
-            {
-                if ($iVersion === \Tars\Consts::TUPVERSION) {
-                    $cmd = \TUPAPI::getString('cmd', $sBuffer, false, $iVersion);
-
-                } elseif ($iVersion === \Tars\Consts::TARSVERSION) {
-                    $cmd = \TUPAPI::getString(1, $sBuffer, false, $iVersion);
+                {
+                    $cmd = "kill -15 " . $master_pid;
+                    exec($cmd, $output, $r);
+                    break;
                 }
+            case 'notify':
+                {
+                    if ($iVersion === \Tars\Consts::TUPVERSION) {
+                        $cmd = \TUPAPI::getString('cmd', $sBuffer, false, $iVersion);
 
-                $returnStr = '';
-                // 查看服务状态
-                if ($cmd == "tars.viewstatus") {
-                    $returnStr = "[1]:==================================================\n[proxy config]:\n";
-                    foreach ($tarsClientConf as $key => $value) {
-                        $returnStr .= "$key      " . $value;
-                        $returnStr .= "\n";
-                    }
-                    $returnStr .= "--------------------------------------------------\n[server config]:\n";
-                    foreach ($tarsServerConf as $key => $value) {
-                        if ($key == "adapters") {
-                            continue;
-                        }
-                        $returnStr .= "$key      " . $value;
-                        $returnStr .= "\n";
+                    } elseif ($iVersion === \Tars\Consts::TARSVERSION) {
+                        $cmd = \TUPAPI::getString(1, $sBuffer, false, $iVersion);
                     }
 
-                    foreach ($tarsServerConf['adapters'] as $adapter) {
-                        $returnStr .= "--------------------------------------------------\n";
-                        foreach ($adapter as $key => $value) {
+                    $returnStr = '';
+                    // 查看服务状态
+                    if ($cmd == "tars.viewstatus") {
+                        $returnStr = "[1]:==================================================\n[proxy config]:\n";
+                        foreach ($tarsClientConf as $key => $value) {
                             $returnStr .= "$key      " . $value;
                             $returnStr .= "\n";
                         }
-                    }
-                    $returnStr .= "--------------------------------------------------\n";
-                } // 加载服务配置
-                else {
-                    if (strstr($cmd, "tars.loadconfig")) {
-                        // 这个事,最好是起一个task worker去干比较好
-                        $parts = explode(' ', $cmd);
-                        $fileName = $parts[1];
-
-
-                        $configF = App::getConfigF();
-                        $configContent = '';
-                        try {
-                            $configF->loadConfig($application, $serverName, $fileName, $configContent);
-
-                            file_put_contents($tarsServerConf['basepath'] . '/src/conf/' . $fileName, $configContent);
-
-                            $returnStr = '[notify file num:1][located in {ServicePath}/bin/conf]';
-                        }
-                        catch (\Exception $e) {
-                            App::getLogger()->error("Load config failed: " . (string) $e);
+                        $returnStr .= "--------------------------------------------------\n[server config]:\n";
+                        foreach ($tarsServerConf as $key => $value) {
+                            if ($key == "adapters") {
+                                continue;
+                            }
+                            $returnStr .= "$key      " . $value;
+                            $returnStr .= "\n";
                         }
 
+                        foreach ($tarsServerConf['adapters'] as $adapter) {
+                            $returnStr .= "--------------------------------------------------\n";
+                            foreach ($adapter as $key => $value) {
+                                $returnStr .= "$key      " . $value;
+                                $returnStr .= "\n";
+                            }
+                        }
+                        $returnStr .= "--------------------------------------------------\n";
+                    } // 加载服务配置
+                    else {
+                        if (strstr($cmd, "tars.loadconfig")) {
+                            // 这个事,最好是起一个task worker去干比较好
+                            $parts = explode(' ', $cmd);
+                            $fileName = $parts[1];
+
+
+                            $configF = App::getConfigF();
+                            $configContent = '';
+                            try {
+                                $configF->loadConfig($application, $serverName, $fileName, $configContent);
+
+                                file_put_contents($tarsServerConf['basepath'] . '/src/conf/' . $fileName,
+                                    $configContent);
+
+                                $returnStr = '[notify file num:1][located in {ServicePath}/bin/conf]';
+                            } catch (\Exception $e) {
+                                App::getLogger()->error("Load config failed: " . (string)$e);
+                            }
+
+                        }
                     }
+
+                    $str = \TUPAPI::putString(0, $returnStr, 1);
+                    $cPacketType = 0;
+                    $iMessageType = 0;
+
+                    $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
+                        $iMessageType, $iRequestId, 0, '', [$str], []);
+                    $response->send($rspBuf);
+
+                    break;
                 }
-
-                $str = \TUPAPI::putString(0, $returnStr, 1);
-                $cPacketType = 0;
-                $iMessageType = 0;
-
-                $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
-                    $iMessageType, $iRequestId, 0, '', [$str], []);
-                $response->send($rspBuf);
-
+            default:
                 break;
-            }
-            default: break;
         }
     }
 

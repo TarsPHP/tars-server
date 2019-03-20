@@ -8,11 +8,15 @@
 
 namespace Tars\core;
 
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
 use Tars\App;
 use Tars\Consts;
 use Tars\protocol\ProtocolFactory;
 use Tars\monitor\StatFServer;
 use Tars\monitor\PropertyFServer;
+use Tars\registry\QueryFWrapper;
+use Tars\registry\RouteTable;
 use Tars\report\ServerFWrapper;
 use Tars\config\ConfigWrapper;
 use Tars\monitor\cache\SwooleTableStoreCache;
@@ -72,8 +76,8 @@ class Server
 
     public function start()
     {
-        $interval           =   $this->tarsClientConfig['report-interval'];
-        $statServantName    =   $this->tarsClientConfig['stat'];
+        $interval = $this->tarsClientConfig['report-interval'];
+        $statServantName = $this->tarsClientConfig['stat'];
         $locator = $this->tarsClientConfig['locator'];
         $moduleName = $this->application . '.' . $this->serverName;
 
@@ -81,15 +85,15 @@ class Server
         // 日志组件初始化 根据平台配置的level来
         $logLevel = $this->tarsServerConfig['loglevel'];
 
-        $logger = new \Monolog\Logger("tars_logger");
+        $logger = new Logger("tars_logger");
 
         $levelMap = [
-            'DEBUG' => \Monolog\Logger::DEBUG,
-            'INFO' => \Monolog\Logger::INFO,
-            'NOTICE' => \Monolog\Logger::NOTICE,
-            'WARNING' => \Monolog\Logger::WARNING,
-            'ERROR' => \Monolog\Logger::ERROR,
-            'CRITICAL' => \Monolog\Logger::CRITICAL,
+            'DEBUG' => Logger::DEBUG,
+            'INFO' => Logger::INFO,
+            'NOTICE' => Logger::NOTICE,
+            'WARNING' => Logger::WARNING,
+            'ERROR' => Logger::ERROR,
+            'CRITICAL' => Logger::CRITICAL,
         ];
 
         $levelNameMap = [
@@ -103,13 +107,13 @@ class Server
         $loggerLevel = $levelMap[$logLevel];
         $loggerName = $levelNameMap[$logLevel];
 
-        $outStreamHandler = new \Monolog\Handler\StreamHandler(
+        $outStreamHandler = new StreamHandler(
             $this->setting['log_file'], $loggerLevel
         );
 
-        $levelStreamHandler = new \Monolog\Handler\StreamHandler(
-            $this->tarsServerConfig['logpath'] . $this->tarsServerConfig['app'].'/'.
-            $this->tarsServerConfig['server'].'/'. $loggerName , $loggerLevel
+        $levelStreamHandler = new StreamHandler(
+            $this->tarsServerConfig['logpath'] . $this->tarsServerConfig['app'] . '/' .
+            $this->tarsServerConfig['server'] . '/' . $loggerName, $loggerLevel
         );
 
         $logger->pushHandler($outStreamHandler);
@@ -123,15 +127,21 @@ class Server
             $interval);
 
         $monitorStoreClassName =
-            isset($servicesInfo['monitorStoreConf']['className']) ?
-                $servicesInfo['monitorStoreConf']['className'] :
+            isset($this->servicesInfo['monitorStoreConf']['className']) ?
+                $this->servicesInfo['monitorStoreConf']['className'] :
                 SwooleTableStoreCache::class;
 
-        $monitorStoreConfig = isset($servicesInfo['monitorStoreConf']['config'])
-            ? $servicesInfo['monitorStoreConf']['config'] : [];
+        $monitorStoreConfig = isset($this->servicesInfo['monitorStoreConf']['config'])
+            ? $this->servicesInfo['monitorStoreConf']['config'] : [];
 
-        $storeCache = new $monitorStoreClassName($monitorStoreConfig);
-        $statF->initStoreCache($storeCache);
+        $registryStoreClassName = isset($this->servicesInfo['registryStoreConf']['className']) ? $this->servicesInfo['registryStoreConf']['className'] : RouteTable::class;
+        $registryStoreConfig = isset($this->servicesInfo['registryStoreConf']['config']) ? $this->servicesInfo['registryStoreConf']['config'] : [];
+
+        $monitorStoreCache = new $monitorStoreClassName($monitorStoreConfig);
+        $statF->initStoreCache($monitorStoreCache);
+
+        $registryStoreCache = new $registryStoreClassName($registryStoreConfig);
+        QueryFWrapper::initStoreCache($registryStoreCache);
 
         //初始化特性上报
         $propertyF = new PropertyFServer($locator, Consts::SWOOLE_SYNC_MODE,
@@ -159,18 +169,21 @@ class Server
         $logger->info("stat/property/keepalive/config/logger service init finish...\n");
 
         switch ($this->servType) {
-            case 'http' : {
-                $swooleServerName = '\swoole_http_server';
-                break;
-            }
-            case 'websocket' : {
-                $swooleServerName = '\swoole_websocket_server';
-                break;
-            }
-            default : {
-                $swooleServerName = '\swoole_server';
-                break;
-            }
+            case 'http' :
+                {
+                    $swooleServerName = '\swoole_http_server';
+                    break;
+                }
+            case 'websocket' :
+                {
+                    $swooleServerName = '\swoole_websocket_server';
+                    break;
+                }
+            default :
+                {
+                    $swooleServerName = '\swoole_server';
+                    break;
+                }
         }
 
         $this->sw = new $swooleServerName($this->host, $this->port,
@@ -195,20 +208,19 @@ class Server
                         }
                     }
                 } else {
-                    $logger->error(__METHOD__ .' Timer directory is missing\n');
+                    $logger->error(__METHOD__ . ' Timer directory is missing\n');
                 }
-            }
-            else {
+            } else {
                 $logger->info("Server type http...\n");
             }
-        }
-        else if($this->servType == 'websocket') {
-            $logger->info("Server type websocket...\n");
-            $this->sw->on('Request', array($this, 'onRequest'));
-            $this->sw->on('Message', array($this, 'onMessage'));
-        }
-        else {
-            $logger->info("Server type tcp...\n");
+        } else {
+            if ($this->servType == 'websocket') {
+                $logger->info("Server type websocket...\n");
+                $this->sw->on('Request', array($this, 'onRequest'));
+                $this->sw->on('Message', array($this, 'onMessage'));
+            } else {
+                $logger->info("Server type tcp...\n");
+            }
         }
 
         $this->sw->set($this->setting);
@@ -223,6 +235,7 @@ class Server
 
         $this->sw->on('Task', array($this, 'onTask'));
         $this->sw->on('Finish', array($this, 'onFinish'));
+        App::setSwooleInstance($this->sw);
 
         $this->masterPidFile = $this->tarsServerConfig['datapath'] . '/master.pid';
         $this->managerPidFile = $this->tarsServerConfig['datapath'] . '/manager.pid';
@@ -279,8 +292,7 @@ class Server
         //拉取配置
         if (!empty($this->servicesInfo) &&
             isset($this->servicesInfo['saveTarsConfigFileDir']) &&
-            isset($this->servicesInfo['saveTarsConfigFileName']))
-        {
+            isset($this->servicesInfo['saveTarsConfigFileName'])) {
             TarsPlatform::loadTarsConfig($this->tarsConfig,
                 $this->servicesInfo['saveTarsConfigFileDir'],
                 $this->servicesInfo['saveTarsConfigFileName']);
@@ -310,19 +322,19 @@ class Server
                 self::$paramInfos[$method->name]
                     = $this->protocol->parseAnnotation($docblock);
             }
-        }
-        // websocket类型
-        else if($this->servType === "websocket") {
-            $this->namespaceName = $this->servicesInfo['namespaceName'];
-            $this->executeClass = $this->servicesInfo['home-class'];
-        }
-        // 其他,包括http等类型
+        } // websocket类型
         else {
-            $this->namespaceName = $this->servicesInfo['namespaceName'];
+            if ($this->servType === "websocket") {
+                $this->namespaceName = $this->servicesInfo['namespaceName'];
+                $this->executeClass = $this->servicesInfo['home-class'];
+            } // 其他,包括http等类型
+            else {
+                $this->namespaceName = $this->servicesInfo['namespaceName'];
+            }
         }
 
 
-        if($workerId == 0) {
+        if ($workerId == 0) {
             // 将定时上报的任务投递到task worker 0,只需要投递一次
             $this->sw->task(
                 [
@@ -338,8 +350,7 @@ class Server
         if ($workerId >= $this->worker_num) {
             $this->_setProcessName($this->application . '.'
                 . $this->serverName . ': task worker process');
-        }
-        else {
+        } else {
             $this->_setProcessName($this->application . '.'
                 . $this->serverName . ': event worker process');
 
@@ -357,7 +368,8 @@ class Server
                             $funcName = 'execute';
                             $obj->$funcName();
                         } catch (\Exception $e) {
-                            App::getLogger()->error(__METHOD__ ." Error in runnable: $runnable, worker id: $workerId, e: " . print_r($e, true));
+                            App::getLogger()->error(__METHOD__ . " Error in runnable: $runnable, worker id: $workerId, e: " . print_r($e,
+                                    true));
                         }
                     });
                 }
@@ -370,55 +382,56 @@ class Server
     {
         switch ($taskId) {
             // 进行定时上报
-            case 0: {
-                $serverName = $data['serverName'];
-                $application = $data['application'];
+            case 0:
+                {
+                    $serverName = $data['serverName'];
+                    $application = $data['application'];
 
-                \swoole_timer_tick(10000, function () use ($data, $serverName, $application) {
+                    \swoole_timer_tick(10000, function () use ($data, $serverName, $application) {
 
-                    //获取当前存活的worker数目
-                    $processName = $application.'.'.$serverName;
-                    $cmd = "ps wwaux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
-                    exec($cmd, $ret);
-                    $workerNum = count($ret);
+                        //获取当前存活的worker数目
+                        $processName = $application . '.' . $serverName;
+                        $cmd = "ps wwaux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
+                        exec($cmd, $ret);
+                        $workerNum = count($ret);
 
-                    if($workerNum >= 1){
-                        TarsPlatform::keepaliveReport($data);
-                    }
-                    //worker全挂，不上报存活 等tars重启
-                    else {
-                        App::getLogger()->error(__METHOD__ . " All workers are not alive any more.");
-                    }
-                });
-
-                //主调定时上报
-                $locator = $data['client']['locator'];
-                $socketMode = Consts::SWOOLE_SYNC_MODE;
-                $statServantName = $data['client']['stat'];
-                $reportInterval = $data['client']['report-interval'];
-
-                \swoole_timer_tick($reportInterval,
-                    function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
-                        try {
-                            $statF = App::getStatF();
-                            $statF->sendStat();
-                        } catch (\Exception $e) {
-                            App::getLogger()->error((string)$e);
+                        if ($workerNum >= 1) {
+                            TarsPlatform::keepaliveReport($data);
+                        } //worker全挂，不上报存活 等tars重启
+                        else {
+                            App::getLogger()->error(__METHOD__ . " All workers are not alive any more.");
                         }
                     });
 
-                // 基础特性上报
-                \swoole_timer_tick($reportInterval,
-                    function () use ($locator, $application, $serverName) {
-                        try {
-                            TarsPlatform::basePropertyMonitor($serverName);
-                        } catch (\Exception $exception) {
-                            App::getLogger()->error((string)$exception);
-                        }
-                });
+                    //主调定时上报
+                    $locator = $data['client']['locator'];
+                    $socketMode = Consts::SWOOLE_SYNC_MODE;
+                    $statServantName = $data['client']['stat'];
+                    $reportInterval = $data['client']['report-interval'];
+
+                    \swoole_timer_tick($reportInterval,
+                        function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
+                            try {
+                                $statF = App::getStatF();
+                                $statF->sendStat();
+                            } catch (\Exception $e) {
+                                App::getLogger()->error((string)$e);
+                            }
+                        });
+
+                    // 基础特性上报
+                    \swoole_timer_tick($reportInterval,
+                        function () use ($locator, $application, $serverName) {
+                            try {
+                                TarsPlatform::basePropertyMonitor($serverName);
+                            } catch (\Exception $exception) {
+                                App::getLogger()->error((string)$exception);
+                            }
+                        });
+                    break;
+                }
+            default:
                 break;
-            }
-            default: break;
         }
     }
 

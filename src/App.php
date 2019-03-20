@@ -52,6 +52,12 @@ class App
     public static $logger;
 
     /**
+     * swoole对象
+     * @var \Swoole\Server
+     */
+    public static $swooleInstance;
+
+    /**
      * @return \Monolog\Logger
      */
     public static function getLogger()
@@ -145,5 +151,21 @@ class App
     public static function setTarsConfig(array $tarsConfig)
     {
         self::$tarsConfig = $tarsConfig;
+    }
+
+    /**
+     * @return \Swoole\Server
+     */
+    public static function getSwooleInstance()
+    {
+        return self::$swooleInstance;
+    }
+
+    /**
+     * @param \Swoole\Server $swooleInstance
+     */
+    public static function setSwooleInstance($swooleInstance)
+    {
+        self::$swooleInstance = $swooleInstance;
     }
 }
