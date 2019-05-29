@@ -69,7 +69,9 @@ class Server
 
         $this->setting = $this->tarsServerConfig['setting'];
 
-        $this->protocolName = $this->tarsServerConfig['protocolName'];
+        if (isset($this->tarsServerConfig['protocolName'])) {
+            $this->protocolName = $this->tarsServerConfig['protocolName'];
+        }
         $this->servType = $this->tarsServerConfig['servType'];
         $this->worker_num = $this->setting['worker_num'];
     }

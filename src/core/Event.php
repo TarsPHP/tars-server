@@ -13,6 +13,7 @@ use Tars\Code;
 
 class Event
 {
+    /** @var Protocol $protocol */
     protected $protocol;
     protected $basePath;
     protected $tarsConfig;

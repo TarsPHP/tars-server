@@ -27,11 +27,15 @@ class HTTPProtocol implements Protocol
         $verb = $request->data['server']['request_method'];
         $list = explode('/', $uri);
 
-        // 这里的大小写和autoload需要确定一个规则
-        return [
-            'class' => ucwords($list[1]) . 'Controller',
-            'action' => 'action' . ucwords($list[2]),
-        ];
+        if (isset($list[1]) && isset($list[2])) {
+            // 这里的大小写和autoload需要确定一个规则
+            return [
+                'class' => ucwords($list[1]) . 'Controller',
+                'action' => 'action' . ucwords($list[2]),
+            ];
+        } else {
+            return [];
+        }
     }
 
     public function parseAnnotation($docblock)
