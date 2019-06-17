@@ -21,7 +21,6 @@ class TarsPlatform
         // 加载tars需要的文件 - 最好是通过autoload来加载
         // 初始化的上报
         $serverInfo = new \Tars\report\ServerInfo();
-        $serverInfo->adapter = $tarsServerConf['adapters'][0]['adapterName'];
         $serverInfo->application = $tarsServerConf['app'];
         $serverInfo->serverName = $tarsServerConf['server'];
         $serverInfo->pid = $master_pid;
@@ -29,7 +28,11 @@ class TarsPlatform
 
         $serverF = App::getServerF();
         try {
-            $serverF->keepAlive($serverInfo);
+            foreach ($tarsServerConf['adapters'] as $adapterObj) {
+                $serverInfo->adapter = $adapterObj['adapterName'];
+                $serverF->keepAlive($serverInfo);
+            }
+
             $serverInfo->adapter = 'AdminAdapter';
             $serverF->keepAlive($serverInfo);
         } catch (\Exception $e) {
@@ -77,18 +80,20 @@ class TarsPlatform
         $application = $data['application'];
         $serverName = $data['serverName'];
         $masterPid = $data['masterPid'];
-        $adapter = $data['adapter'];
+        $adapters = $data['adapters'];
 
         // 进行一次上报
         $serverInfo = new \Tars\report\ServerInfo();
-        $serverInfo->adapter = $adapter;
         $serverInfo->application = $application;
         $serverInfo->serverName = $serverName;
         $serverInfo->pid = $masterPid;
 
         try {
             $serverF = App::getServerF();
-            $serverF->keepAlive($serverInfo);
+            foreach ($adapters as $adapter) {
+                $serverInfo->adapter = $adapter;
+                $serverF->keepAlive($serverInfo);
+            }
 
             $adminServerInfo = new \Tars\report\ServerInfo();
             $adminServerInfo->adapter = 'AdminAdapter';

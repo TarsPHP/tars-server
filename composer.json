@@ -1,7 +1,7 @@
 {
     "name": "phptars/tars-server",
     "description": "tars的php框架",
-    "version":"0.2.5",
+    "version":"0.3.0",
     "authors": [
         {
             "name": "Chen Liang",
@@ -14,11 +14,16 @@
         {
             "name": "Jingfeng Liu",
             "email": "liujingfeng.a@yuewen.com"
+        },
+        {
+            "name": "Yong Zhang",
+            "email": "bob_zy@yeah.net"
         }
     ],
     "minimum-stability": "stable",
     "require": {
         "php": ">=5.6",
+        "phptars/tars-utils": "~0.3",
         "phptars/tars-client": "~0.2",
         "phptars/tars-report": "~0.1",
         "phptars/tars-config": "~0.1",
