@@ -551,7 +551,15 @@ class Server
      */
     public function onMessage($server, $frame)
     {
-        $className = $this->executeClass;
+        $info = $server->connection_info($frame->fd);
+        $port = $info['server_port'];
+        if (!isset($this->portObjNameMap[$port])) {
+            App::getLogger()->error(__METHOD__ . " failed. obj name with port $port not found ");
+            return;
+        }
+        $objName = $this->portObjNameMap[$port];
+
+        $className = $this->executeClass[$objName];
 
         $class = new $className();
         $fun = "onMessage";

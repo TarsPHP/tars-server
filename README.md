@@ -117,12 +117,13 @@ onRequest方法:
 * phptars/tars-config: 负责对于平台上传的配置的拉取
 
 ## Changelog
-### v0.3.0(2019-06-21)
+### v0.3.1(2019-06-21)
 - 支持多个servant
 - 使用swoole addListener 做底层支持
 - 支持一个服务部署多个obj，分别使用tars 或 http 协议
 - services.php 格式调整，返回以objName 为key 的二维数组。
 - protocolName, serverType, isTimer 不在从私有模板中读取，需要在services.php中指定
+- 修复多servant对webSocket的支持
 
 ### v0.2.4(2019-03-20)
 - 按照psr规则格式化代码
