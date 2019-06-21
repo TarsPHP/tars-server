@@ -35,10 +35,7 @@ class Server
     protected $serverName = '';
     protected $protocolName = 'tars';
 
-    protected $host = '0.0.0.0';
-    protected $port = '8088';
-    protected $worker_num = 4;
-    protected $servType = 'tcp';
+    protected $workerNum = 4;
 
     protected $setting;
 
@@ -51,6 +48,10 @@ class Server
     protected $protocol;
     protected $timers;
 
+    protected $portObjNameMap = [];
+    protected $adapters = [];
+    protected $timerObjName = null;
+
     public function __construct($conf)
     {
         $this->tarsServerConfig = $conf['tars']['application']['server'];
@@ -62,18 +63,14 @@ class Server
         $this->application = $this->tarsServerConfig['app'];
         $this->serverName = $this->tarsServerConfig['server'];
 
-        $this->host = empty($this->tarsServerConfig['listen'][0]['bIp'])
-            ? $this->tarsServerConfig['listen'][0]['sHost']
-            : $this->tarsServerConfig['listen'][0]['bIp'];
-        $this->port = $this->tarsServerConfig['listen'][0]['iPort'];
-
         $this->setting = $this->tarsServerConfig['setting'];
 
         if (isset($this->tarsServerConfig['protocolName'])) {
             $this->protocolName = $this->tarsServerConfig['protocolName'];
         }
-        $this->servType = $this->tarsServerConfig['servType'];
-        $this->worker_num = $this->setting['worker_num'];
+
+        $this->workerNum = $this->setting['worker_num'];
+        $this->adapters = $this->tarsServerConfig['adapters'];
     }
 
     public function start()
@@ -124,9 +121,7 @@ class Server
 
         $logger->info("stat/property/keepalive/config/logger service init start...\n");
         // 初始化被调上报
-        $statF = new StatFServer($locator, Consts::SWOOLE_SYNC_MODE,
-            $statServantName, $moduleName,
-            $interval);
+        $statF = new StatFServer($locator, Consts::SWOOLE_SYNC_MODE, $statServantName, $moduleName, $interval);
 
         $monitorStoreClassName =
             isset($this->servicesInfo['monitorStoreConf']['className']) ?
@@ -170,58 +165,89 @@ class Server
 
         $logger->info("stat/property/keepalive/config/logger service init finish...\n");
 
-        switch ($this->servType) {
-            case 'http' :
-                {
-                    $swooleServerName = '\swoole_http_server';
-                    break;
+
+        foreach ($this->adapters as $key => $adapter) {
+            $serviceInfo = $this->servicesInfo[$adapter['objName']];
+            $ip = $adapter['listen']['sIp'];
+            $port = $adapter['listen']['iPort'];
+            $objName = $adapter['objName'];
+            if (isset($serviceInfo['isTimer']) && $serviceInfo['isTimer']) {
+                if ($this->timerObjName == null) {
+                    $this->timerObjName = $objName;
+                } else {
+                    App::getLogger()->error(__METHOD__ . " only support one timer obj, check services.php");
                 }
-            case 'websocket' :
-                {
-                    $swooleServerName = '\swoole_websocket_server';
-                    break;
+            }
+
+            if ($key == 0) {
+                switch ($serviceInfo['serverType']) {
+                    case 'http' :
+                        $this->sw = new \swoole_http_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $this->sw->on('Request', array($this, 'onRequest'));
+                        $logger->info("$objName Server type http...\n");
+                        break;
+                    case 'websocket' :
+                        $this->sw = new \swoole_websocket_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $this->sw->on('Request', array($this, 'onRequest'));
+                        $this->sw->on('Message', array($this, 'onMessage'));
+                        $logger->info("$objName Server type webSocket...\n");
+                        break;
+                    case 'udp' :
+                        $this->sw = new \swoole_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_UDP);
+                        $logger->info("$objName Server type udp...\n");
+                        break;
+                    default : //tcp
+                        $this->sw = new \swoole_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $logger->info("$objName Server type tcp...\n");
+                        break;
                 }
-            default :
-                {
-                    $swooleServerName = '\swoole_server';
-                    break;
+            } else {
+                switch ($serviceInfo['serverType']) {
+                    case 'http' :
+                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
+                        $portObj->set(['open_websocket_protocol' => false, 'open_http_protocol' => true,]);
+                        $portObj->on('Request', array($this, 'onRequest'));
+                        $logger->info("$objName Server type http...\n");
+                        break;
+                    case 'websocket' :
+                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
+                        $portObj->set(['open_websocket_protocol' => true, 'open_http_protocol' => false,]);
+                        $portObj->on('Request', array($this, 'onRequest'));
+                        $portObj->on('Message', array($this, 'onMessage'));
+                        $logger->info("$objName Server type webSocket...\n");
+                        break;
+                    case 'udp' :
+                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_UDP);
+                        $portObj->set(['open_websocket_protocol' => false, 'open_http_protocol' => false,]);
+                        $logger->info("$objName Server type udp...\n");
+                        break;
+                    default : //tcp
+                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
+                        $portObj->set(['open_websocket_protocol' => false, 'open_http_protocol' => false,]);
+                        $logger->info("$objName Server type tcp...\n");
+                        break;
                 }
+            }
+
+            $this->portObjNameMap[$port] = $objName;
         }
 
-        $this->sw = new $swooleServerName($this->host, $this->port,
-            SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
-        $this->sw->servType = $this->servType;
+        // 判断是否是timer服务
+        if ($this->timerObjName) {
+            $logger->info("Server type timer...\n");
 
-        if ($this->servType == 'http') {
-            $this->sw->on('Request', array($this, 'onRequest'));
+            $timerDir = $this->tarsServerConfig['basepath'] . 'src/timer/';
 
-            // 判断是否是timer服务
-            if (isset($this->tarsServerConfig['isTimer']) && $this->tarsServerConfig['isTimer'] == true) {
-                $logger->info("Server type timer...\n");
-
-                $timerDir = $this->tarsServerConfig['basepath'] . 'src/timer/';
-
-                if (is_dir($timerDir)) {
-                    $files = scandir($timerDir);
-                    foreach ($files as $f) {
-                        $fileName = $timerDir . $f;
-                        if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
-                            $this->timers[] = $fileName;
-                        }
+            if (is_dir($timerDir)) {
+                $files = scandir($timerDir);
+                foreach ($files as $f) {
+                    $fileName = $timerDir . $f;
+                    if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
+                        $this->timers[] = $fileName;
                     }
-                } else {
-                    $logger->error(__METHOD__ . ' Timer directory is missing\n');
                 }
             } else {
-                $logger->info("Server type http...\n");
-            }
-        } else {
-            if ($this->servType == 'websocket') {
-                $logger->info("Server type websocket...\n");
-                $this->sw->on('Request', array($this, 'onRequest'));
-                $this->sw->on('Message', array($this, 'onMessage'));
-            } else {
-                $logger->info("Server type tcp...\n");
+                $logger->error(__METHOD__ . ' Timer directory is missing\n');
             }
         }
 
@@ -305,36 +331,37 @@ class Server
     public function onManagerStart()
     {
         // rename manager process
-        $this->_setProcessName($this->application . '.'
-            . $this->serverName . ': manager process');
+        $this->_setProcessName($this->application . '.' . $this->serverName . ': manager process');
     }
 
     public function onWorkerStart($server, $workerId)
     {
-        // tcp类型需要注册入口
-        if ($this->servType === 'tcp') {
-            $className = $this->servicesInfo['home-class'];
-            self::$impl = new $className();
-            $interface = new \ReflectionClass($this->servicesInfo['home-api']);
-            $methods = $interface->getMethods();
+        foreach ($this->adapters as $adapter) {
+            $objName = $adapter['objName'];
 
-            foreach ($methods as $method) {
-                $docblock = $method->getDocComment();
-                // 对于注释也应该有自己的定义和解析的方式
-                self::$paramInfos[$method->name]
-                    = $this->protocol->parseAnnotation($docblock);
-            }
-        } // websocket类型
-        else {
-            if ($this->servType === "websocket") {
-                $this->namespaceName = $this->servicesInfo['namespaceName'];
-                $this->executeClass = $this->servicesInfo['home-class'];
-            } // 其他,包括http等类型
-            else {
-                $this->namespaceName = $this->servicesInfo['namespaceName'];
+            switch ($this->servicesInfo[$objName]['serverType']) {
+                case 'tcp' :
+                case 'udp' :
+                    $className = $this->servicesInfo[$objName]['home-class'];
+                    self::$impl[$objName] = new $className();
+                    $interface = new \ReflectionClass($this->servicesInfo[$objName]['home-api']);
+                    $methods = $interface->getMethods();
+
+                    foreach ($methods as $method) {
+                        $docBlock = $method->getDocComment();
+                        // 对于注释也应该有自己的定义和解析的方式
+                        self::$paramInfos[$objName][$method->name] = $this->protocol->parseAnnotation($docBlock);
+                    }
+                    break;
+                case 'websocket' :
+                    $this->namespaceName[$objName] = $this->servicesInfo[$objName]['namespaceName'];
+                    $this->executeClass[$objName] = $this->servicesInfo[$objName]['home-class'];
+                    break;
+                default : //http
+                    $this->namespaceName[$objName] = $this->servicesInfo[$objName]['namespaceName'];
+                    break;
             }
         }
-
 
         if ($workerId == 0) {
             // 将定时上报的任务投递到task worker 0,只需要投递一次
@@ -343,25 +370,22 @@ class Server
                     'application' => $this->application,
                     'serverName' => $this->serverName,
                     'masterPid' => $server->master_pid,
-                    'adapter' => $this->tarsServerConfig['adapters'][0]['adapterName'],
+                    'adapters' => array_column($this->tarsServerConfig['adapters'], 'adapterName'),
                     'client' => $this->tarsClientConfig
                 ], 0);
         }
 
         // task worker
-        if ($workerId >= $this->worker_num) {
-            $this->_setProcessName($this->application . '.'
-                . $this->serverName . ': task worker process');
+        if ($workerId >= $this->workerNum) {
+            $this->_setProcessName($this->application . '.' . $this->serverName . ': task worker process');
         } else {
-            $this->_setProcessName($this->application . '.'
-                . $this->serverName . ': event worker process');
+            $this->_setProcessName($this->application . '.' . $this->serverName . ': event worker process');
 
             // 定时timer执行逻辑
             if (isset($this->timers[$workerId])) {
                 $runnable = $this->timers[$workerId];
                 require_once $runnable;
-                $className = $this->namespaceName . 'timer\\'
-                    . basename($runnable, '.php');
+                $className = $this->namespaceName[$this->timerObjName] . 'timer\\' . basename($runnable, '.php');
 
                 $obj = new $className();
                 if (method_exists($obj, 'execute')) {
@@ -441,23 +465,31 @@ class Server
     // 这里应该找到对应的解码协议类型,执行解码,并在收到逻辑处理回复后,进行编码和发送数据
     public function onReceive($server, $fd, $fromId, $data)
     {
-        $req = new Request();
-        $req->reqBuf = $data;
-        $req->paramInfos = self::$paramInfos;
-        $req->impl = self::$impl;
-
-        // 把全局对象带入到请求中,在多个worker之间共享
-        $req->server = $this->sw;
         $resp = new Response();
         $resp->fd = $fd;
         $resp->fromFd = $fromId;
         $resp->server = $server;
 
-
         // 处理管理端口的特殊逻辑
         $unpackResult = \TUPAPI::decodeReqPacket($data);
         $sServantName = $unpackResult['sServantName'];
         $sFuncName = $unpackResult['sFuncName'];
+
+        $objName = explode('.', $sServantName)[2];
+
+        if (!isset(self::$paramInfos[$objName]) || !isset(self::$impl[$objName])) {
+            App::getLogger()->error(__METHOD__ . " objName $objName not found.");
+            $resp->send('');
+            //TODO 这里好像可以直接返回一个taf error code 提示obj 不存在的
+            return;
+        }
+
+        $req = new Request();
+        $req->reqBuf = $data;
+        $req->paramInfos = self::$paramInfos[$objName];
+        $req->impl = self::$impl[$objName];
+        // 把全局对象带入到请求中,在多个worker之间共享
+        $req->server = $this->sw;
 
         // 处理管理端口相关的逻辑
         if ($sServantName === 'AdminObj') {
@@ -465,7 +497,7 @@ class Server
         }
 
         $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->protocolName));
+        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
         $event->setBasePath($this->tarsServerConfig['basepath']);
         $event->setTarsConfig($this->tarsConfig);
 
@@ -489,18 +521,25 @@ class Server
         if (empty($req->data['post'])) {
             $req->data['post'] = $request->rawContent();
         }
-        $req->servType = $this->servType;
-        $req->namespaceName = $this->namespaceName;
+
+        $port = $req->data['server']['server_port'];
+        if (!isset($this->portObjNameMap[$port])) {
+            App::getLogger()->error(__METHOD__ . " failed. obj name with port $port not found ");
+            return;
+        }
+        $objName = $this->portObjNameMap[$port];
+
+        $req->servType = $this->servicesInfo[$objName]['serverType'];
+        $req->namespaceName = $this->namespaceName[$objName];
 
         $req->server = $this->sw;
 
         $resp = new Response();
-        $resp->servType = $this->servType;
+        $resp->servType = $this->servicesInfo[$objName]['serverType'];
         $resp->resource = $response;
 
-
         $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->protocolName));
+        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
         $event->onRequest($req, $resp);
 
     }
