@@ -52,6 +52,9 @@ class Response
             case 'http':
                 $this->resource->end($data);
                 break;
+            case 'grpc':
+                $this->resource->end($data);
+                break;
             default:
                 $this->server->send($this->fd, $data);
         }
