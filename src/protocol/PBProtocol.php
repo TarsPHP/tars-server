@@ -58,15 +58,15 @@ class PBProtocol implements Protocol
      */
     public function packErrRsp($unpackResult, $code, $msg)
     {
-        $this->response->trailer("grpc-status", $code);
-        $this->response->trailer("grpc-message", $msg);
+        $this->response->resource->trailer("grpc-status", $code);
+        $this->response->resource->trailer("grpc-message", $msg);
         return '';
     }
 
     public function packRsp($paramInfo, $unpackResult, $args, $returnVal)
     {
-        $this->response->trailer("grpc-status", "0");
-        $this->response->trailer("grpc-message", '');
+        $this->response->resource->trailer("grpc-status", "0");
+        $this->response->resource->trailer("grpc-message", '');
 
         $returnObj = $args[1];
         return self::serializeMessage($returnObj);
