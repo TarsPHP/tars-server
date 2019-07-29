@@ -13,9 +13,11 @@ class Response
     public $fd;
     public $fromFd;
     public $server;
-    public $rspBuf;
+    public $rspData;
     public $servType;
     public $resource;
+
+    private $data;
 
     public function sendto($ip, $port, $data, $ipv6 = false)
     {
@@ -60,5 +62,12 @@ class Response
     public function addTask(Task $task)
     {
         $this->server->addTask($task);
+    }
+
+    public function getData() {
+        return $this->data;
+    }
+    public function setData($data) {
+        $this->data = $data;
     }
 }

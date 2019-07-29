@@ -288,9 +288,9 @@ class TarsPlatform
                     $cPacketType = 0;
                     $iMessageType = 0;
 
-                    $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
+                    $rspData = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
                         $iMessageType, $iRequestId, 0, '', [$str], []);
-                    $response->send($rspBuf);
+                    $response->send($rspData);
 
                     break;
                 }

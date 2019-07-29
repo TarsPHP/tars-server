@@ -33,10 +33,6 @@ class Event
         $this->tarsConfig = $tarsConfig;
     }
 
-    // 我希望别人在这个之前和之后,都可以通过自己的代码来介入开发
-    // 应该是request对象和response对象
-    // 对unpackResult的结构要求:
-
     public function onReceive(Request $request, Response &$response)
     {
         $impl = $request->impl;
@@ -46,37 +42,33 @@ class Event
             // 这里通过protocol先进行unpack
             $result = $this->protocol->route($request, $response, $this->tarsConfig);
 
-            if (is_null($result)) {
-                return;
+
+            $sFuncName = $result['sFuncName'];
+            $args = $result['args'];
+            $unpackResult = $result['unpackResult'];
+            if (method_exists($impl, $sFuncName)) {
+                $returnVal = $impl->$sFuncName(...$args);
             } else {
-                $sFuncName = $result['sFuncName'];
-                $args = $result['args'];
-                $unpackResult = $result['unpackResult'];
-                if (method_exists($impl, $sFuncName)) {
-                    $returnVal = $impl->$sFuncName(...$args);
-                } else {
-                    throw new \Exception(Code::TARSSERVERNOFUNCERR);
-                }
-                $paramInfo = $paramInfos[$sFuncName];
-
-                $rspBuf = $this->protocol->packRsp($paramInfo, $unpackResult, $args, $returnVal);
-                $response->send($rspBuf);
-
-                return;
+                throw new \Exception(Code::TARSSERVERNOFUNCERR);
             }
+            $paramInfo = $paramInfos[$sFuncName];
+
+            $rspData = $this->protocol->packRsp($paramInfo, $unpackResult, $args, $returnVal);
+
+            return $rspData;
+
         } catch (\Exception $e) {
             $unpackResult['iVersion'] = 1;
-            $rspBuf = $this->protocol->packErrRsp($unpackResult, $e->getCode(), $e->getMessage());
-            $response->send($rspBuf);
+            $rspData = $this->protocol->packErrRsp($unpackResult, $e->getCode(), $e->getMessage());
 
-            return;
+            return $rspData;
         }
     }
 
     /**
      * @param Request $request
      * @param Response $response
-     *                           针对http进行处理
+     * 针对http进行处理
      */
     public function onRequest(Request $request, Response $response)
     {

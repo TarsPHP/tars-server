@@ -19,7 +19,7 @@ class TARSProtocol implements Protocol
     // 路由的方式
     public function route(Request $request, Response $response, $tarsConfig = [])
     {
-        $unpackResult = $this->unpackReq($request->reqBuf);
+        $unpackResult = $this->unpackReq($request->reqData);
         $sServantName = $unpackResult['sServantName'];
         $sFuncName = $unpackResult['sFuncName'];
 
@@ -31,7 +31,6 @@ class TARSProtocol implements Protocol
         $paramInfo = $paramInfos[$sFuncName];
 
         // 需要一个函数,专门把参数,转换为args
-
         $args = $this->convertToArgs($paramInfo, $unpackResult);
 
         return [
@@ -47,12 +46,6 @@ class TARSProtocol implements Protocol
         $decodeRet = \TUPAPI::decodeReqPacket($data);
 
         return $decodeRet;
-
-//        $respBuf = $decodeRet['sBuffer'];
-
-//        $iVersion = $decodeRet['iVersion'];
-//        $sFuncName = $decodeRet['sFuncName'];
-//        $sServantName = $decodeRet['sServantName'];
     }
 
     public function packBuffer($type, $argv, $tag, $name, $iVersion = 3)
@@ -105,7 +98,7 @@ class TARSProtocol implements Protocol
         $encodeBufs = [];
 
         if ($iVersion === 1) {
-            $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
+            $rspData = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
                 $iMessageType, $iRequestId, $code, empty($msg) ? Code::getMsg($code) : $msg, $encodeBufs, $statuses);
         } else {
             $servantName = $unpackResult['sServantName'];
@@ -113,11 +106,11 @@ class TARSProtocol implements Protocol
             $context = [];
             $iTimeout = 0;
             $statuses['STATUS_RESULT_CODE'] = $code;
-            $rspBuf = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
+            $rspData = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
                 $iMessageType, $iTimeout, $context, $statuses, $encodeBufs);
         }
 
-        return $rspBuf;
+        return $rspData;
     }
 
     public function packRsp($paramInfo, $unpackResult, $args, $returnVal)
@@ -153,7 +146,7 @@ class TARSProtocol implements Protocol
 
                 $statuses = [];
 
-                $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
+                $rspData = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
                     $iMessageType, $iRequestId, Code::TARSSERVERSUCCESS, 'success', $encodeBufs, $statuses);
             } else {
                 $return = $paramInfo['return'];
@@ -186,11 +179,11 @@ class TARSProtocol implements Protocol
                 $iTimeout = 0;
                 $statuses['STATUS_RESULT_CODE'] = Code::TARSSERVERSUCCESS;
 
-                $rspBuf = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
+                $rspData = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
                     $iMessageType, $iTimeout, $context, $statuses, $encodeBufs);
             }
 
-            return $rspBuf;
+            return $rspData;
         } catch (\Exception $e) {
             throw new \Exception(Code::TARSSERVERSUCCESS);
         }

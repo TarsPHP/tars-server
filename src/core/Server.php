@@ -11,6 +11,7 @@ namespace Tars\core;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
 use Tars\App;
+use Tars\Code;
 use Tars\Consts;
 use Tars\protocol\ProtocolFactory;
 use Tars\monitor\StatFServer;
@@ -51,6 +52,10 @@ class Server
     protected $portObjNameMap = [];
     protected $adapters = [];
     protected $timerObjName = null;
+    protected $preFilters = [];
+    protected $preFiltersPath = "";
+    protected $postFilters = [];
+    protected $postFiltersPath = "";
 
     public function __construct($conf)
     {
@@ -230,6 +235,36 @@ class Server
             }
 
             $this->portObjNameMap[$port] = $objName;
+
+            // 针对preFilters的初始化
+            $preFiltersPath = $serviceInfo['preFiltersPath'];
+            if (is_dir($preFiltersPath)) {
+                $this->preFilters[$objName]["path"] = $preFiltersPath;
+                $preFiltersFiles = scandir($preFiltersPath);
+                foreach ($preFiltersFiles as $fileName) {
+                    if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
+                        $this->preFilters[$objName]["fileNames"][] = $fileName;
+                    }
+                }
+            } else {
+                $logger->error(__METHOD__ .
+                ' The configuration for preFiltersPath is invalid.\n');
+            }
+
+            // 针对postFilters的初始化
+            $postFiltersPath = $serviceInfo['postFiltersPath'];
+            if (is_dir($postFiltersPath)) {
+                $this->postFilters[$objName]["path"] = $postFiltersPath;
+                $postFiltersFiles = scandir($postFiltersPath);
+                foreach ($postFiltersFiles as $fileName) {
+                    if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
+                        $this->postFilters[$objName]["fileNames"][] = $fileName;
+                    }
+                }
+            } else {
+                $logger->error(__METHOD__ .
+                    ' The configuration for postFiltersPath is invalid.\n');
+            }
         }
 
         // 判断是否是timer服务
@@ -463,46 +498,93 @@ class Server
 
 
     // 这里应该找到对应的解码协议类型,执行解码,并在收到逻辑处理回复后,进行编码和发送数据
-    public function onReceive($server, $fd, $fromId, $data)
+    public function onReceive($server, $fd, $fromId, $reqData)
     {
-        $resp = new Response();
-        $resp->fd = $fd;
-        $resp->fromFd = $fromId;
-        $resp->server = $server;
+        $response = new Response();
+        $response->fd = $fd;
+        $response->fromFd = $fromId;
+        $response->server = $server;
 
-        // 处理管理端口的特殊逻辑
-        $unpackResult = \TUPAPI::decodeReqPacket($data);
+        $unpackResult = \TUPAPI::decodeReqPacket($reqData);
         $sServantName = $unpackResult['sServantName'];
         $sFuncName = $unpackResult['sFuncName'];
-
-        $objName = explode('.', $sServantName)[2];
-
-        if (!isset(self::$paramInfos[$objName]) || !isset(self::$impl[$objName])) {
-            App::getLogger()->error(__METHOD__ . " objName $objName not found.");
-            $resp->send('');
-            //TODO 这里好像可以直接返回一个taf error code 提示obj 不存在的
+        // 处理管理端口相关的逻辑
+        if ($sServantName === 'AdminObj') {
+            TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $response, $this->sw->master_pid);
             return;
         }
 
-        $req = new Request();
-        $req->reqBuf = $data;
-        $req->paramInfos = self::$paramInfos[$objName];
-        $req->impl = self::$impl[$objName];
-        // 把全局对象带入到请求中,在多个worker之间共享
-        $req->server = $this->sw;
+        $objName = explode('.', $sServantName)[2];
 
-        // 处理管理端口相关的逻辑
-        if ($sServantName === 'AdminObj') {
-            TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $resp, $this->sw->master_pid);
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
+        if (!isset(self::$paramInfos[$objName]) || !isset(self::$impl[$objName])) {
+            App::getLogger()->error(__METHOD__ . " objName $objName not found.");
+            $unpackResult['iVersion'] = 1;
+            $rspData = $protocol->packErrRsp($unpackResult, Code::TARSSERVERNOSERVANTERR, Code::getMsg(Code::TARSSERVERNOSERVANTERR));
+        }
+        else {
+            $request = new Request();
+            $request->reqData = $reqData;
+            $request->paramInfos = self::$paramInfos[$objName];
+            $request->impl = self::$impl[$objName];
+
+            // 处理管理端口相关的逻辑
+            if ($sServantName === 'AdminObj') {
+                TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName,
+                    $request, $this->sw->master_pid);
+            }
+
+            // if any pre filters exist, do the filter step
+            $preFiltersFileNames = $this->preFilters[$objName]["fileNames"];
+            if(!empty($preFiltersFileNames)) {
+                foreach ($preFiltersFileNames as $preFiltersFileName) {
+                    require_once $preFiltersFileName;
+                    $className = $this->namespaceName[$objName] . 'preFilters\\' . basename($preFiltersFileName, '.php');
+
+                    $obj = new $className();
+                    if (!($obj instanceof PreFilter))
+                        continue;
+                    $funcName = "doFilter";
+                    try {
+                        $obj->$funcName($request);
+                    }
+                    catch (\Exception $e) {
+                        App::getLogger()->error(__METHOD__ . " Pre-filter with name ".$preFiltersFileName." failed.");
+                    }
+                }
+            }
+
+            $event = new Event();
+            $event->setProtocol($protocol);
+            $event->setBasePath($this->tarsServerConfig['basepath']);
+            $event->setTarsConfig($this->tarsConfig);
+
+            // 预先对impl和paramInfos进行处理,这样可以速度更快
+            $rspData = $event->onReceive($request, $response);
         }
 
-        $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
-        $event->setBasePath($this->tarsServerConfig['basepath']);
-        $event->setTarsConfig($this->tarsConfig);
+        // if any post filters exist, do the filter step
+        $postFiltersFileNames = $this->postFilters[$objName]["fileNames"];
+        if(!empty($postFiltersFileNames)) {
+            foreach ($postFiltersFileNames as $postFiltersFileName) {
+                require_once $postFiltersFileName;
+                $className = $this->namespaceName[$objName] . 'postFilters\\' . basename($postFiltersFileName, '.php');
 
-        // 预先对impl和paramInfos进行处理,这样可以速度更快
-        $event->onReceive($req, $resp);
+                $obj = new $className();
+                if (!($obj instanceof PreFilter))
+                    continue;
+                $funcName = "doFilter";
+                try {
+                    $obj->$funcName($response);
+                }
+                catch (\Exception $e) {
+                    App::getLogger()->error(__METHOD__ . " Pre-filter with name ".$postFiltersFileName." failed.");
+                }
+            }
+            $rspData = $response->rspData;
+        }
+        $response->send($rspData);
+
     }
 
     /**
@@ -527,7 +609,6 @@ class Server
             App::getLogger()->error(__METHOD__ . " failed. obj name with port $port not found ");
             return;
         }
-        $objName = $this->portObjNameMap[$port];
 
         $req->servType = $this->servicesInfo[$objName]['serverType'];
         $req->namespaceName = $this->namespaceName[$objName];

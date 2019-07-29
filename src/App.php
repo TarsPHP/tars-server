@@ -58,6 +58,12 @@ class App
     public static $swooleInstance;
 
     /**
+     * Context
+     * @array
+     */
+    public static $context;
+
+    /**
      * @return \Monolog\Logger
      */
     public static function getLogger()
@@ -167,5 +173,21 @@ class App
     public static function setSwooleInstance($swooleInstance)
     {
         self::$swooleInstance = $swooleInstance;
+    }
+
+    /**
+     * @return
+     */
+    public static function getContext()
+    {
+        return self::getContext();
+    }
+
+    /**
+     * @param
+     */
+    public static function setContext($context)
+    {
+        self::$context = $context;
     }
 }

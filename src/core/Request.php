@@ -10,7 +10,7 @@ namespace Tars\core;
 
 class Request
 {
-    public $reqBuf;
+    public $reqData;
     public $servType;
     public $data;
     public $server = array();
@@ -18,4 +18,11 @@ class Request
     public $paramInfos;
     public $impl;
     public $namespaceName; //标识当前服务的namespacePrefix
+
+    public function getData() {
+        return $this->data;
+    }
+    public function setData($data) {
+        $this->data = $data;
+    }
 }
