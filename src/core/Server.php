@@ -33,6 +33,7 @@ class Server
 
     protected $application;
     protected $serverName = '';
+    protected $routeName = 'default';
     protected $protocolName = 'tars';
 
     protected $workerNum = 4;
@@ -69,6 +70,10 @@ class Server
             $this->protocolName = $this->tarsServerConfig['protocolName'];
         }
 
+        if (isset($this->tarsServerConfig['routeName'])) {
+            $this->routeName = $this->tarsServerConfig['routeName'];
+        }
+        
         $this->workerNum = $this->setting['worker_num'];
         $this->adapters = $this->tarsServerConfig['adapters'];
     }
@@ -537,9 +542,11 @@ class Server
         $resp = new Response();
         $resp->servType = $this->servicesInfo[$objName]['serverType'];
         $resp->resource = $response;
-
+    
         $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
+        $protocol = ProtocolFactory::getProtocol($this->protocolName);
+        $protocol->setRoute(RouteFactory::getRoute($this->routeName));
+        $event->setProtocol($protocol);
         $event->onRequest($req, $resp);
 
     }
