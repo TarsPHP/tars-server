@@ -20,6 +20,8 @@ use Tars\registry\RouteTable;
 use Tars\report\ServerFWrapper;
 use Tars\config\ConfigWrapper;
 use Tars\monitor\cache\SwooleTableStoreCache;
+use Tars\route\RouteFactory;
+use Tars\Code;
 
 class Server
 {
@@ -500,14 +502,36 @@ class Server
         if ($sServantName === 'AdminObj') {
             TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $resp, $this->sw->master_pid);
         }
-
-        $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
-        $event->setBasePath($this->tarsServerConfig['basepath']);
-        $event->setTarsConfig($this->tarsConfig);
-
-        // 预先对impl和paramInfos进行处理,这样可以速度更快
-        $event->onReceive($req, $resp);
+    
+        $impl = $req->impl;
+        $paramInfos = $req->paramInfos;
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
+        try {
+            // 这里通过protocol先进行unpack
+            $result = $protocol->route($req, $resp, $this->tarsConfig);
+            if (is_null($result)) {
+                return;
+            } else {
+                $sFuncName = $result['sFuncName'];
+                $args = $result['args'];
+                $unpackResult = $result['unpackResult'];
+                if (method_exists($impl, $sFuncName)) {
+                    $returnVal = $impl->$sFuncName(...$args);
+                } else {
+                    throw new \Exception(Code::TARSSERVERNOFUNCERR);
+                }
+                $paramInfo = $paramInfos[$sFuncName];
+                $rspBuf = $protocol->packRsp($paramInfo, $unpackResult, $args, $returnVal);
+                $resp->send($rspBuf);
+                return;
+            }
+        } catch (\Exception $e) {
+            $unpackResult['iVersion'] = 1;
+            $rspBuf = $protocol->packErrRsp($unpackResult, $e->getCode(), $e->getMessage());
+            $resp->send($rspBuf);
+            return;
+        }
+        
     }
 
     /**
@@ -543,12 +567,15 @@ class Server
         $resp->servType = $this->servicesInfo[$objName]['serverType'];
         $resp->resource = $response;
     
-        $event = new Event();
+        if ($req->data['server']['request_uri'] == '/monitor/monitor') {
+            $resp->header('Content-Type', 'application/json');
+            $resp->send("{'code':0}");
+            return;
+        }
+        
         $protocol = ProtocolFactory::getProtocol($this->protocolName);
         $protocol->setRoute(RouteFactory::getRoute($this->routeName));
-        $event->setProtocol($protocol);
-        $event->onRequest($req, $resp);
-
+        $protocol->route($request, $response);
     }
 
     /**
