@@ -672,7 +672,7 @@ class Server
         
         $protocol = ProtocolFactory::getProtocol($this->protocolName);
         $protocol->setRoute(RouteFactory::getRoute($this->routeName));
-        $protocol->route($request, $response);
+        $protocol->route($req, $resp);
     }
 
     /**
