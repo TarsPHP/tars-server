@@ -593,13 +593,41 @@ class Server
         // 把全局对象带入到请求中,在多个worker之间共享
         $req->server = $this->sw;
 
-        $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
-        $event->setBasePath($this->tarsServerConfig['basepath']);
-        $event->setTarsConfig($this->tarsConfig);
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
 
         // 预先对impl和paramInfos进行处理,这样可以速度更快
-        $event->onReceive($req, $resp);
+        $impl = $req->impl;
+        $paramInfos = $req->paramInfos;
+
+        try {
+            // 这里通过protocol先进行unpack
+            $result = $protocol->route($req, $resp, $this->tarsConfig);
+    
+            if (is_null($result)) {
+                return;
+            } else {
+                $sFuncName = $result['sFuncName'];
+                $args = $result['args'];
+                $unpackResult = $result['unpackResult'];
+                if (method_exists($impl, $sFuncName)) {
+                    $returnVal = $impl->$sFuncName(...$args);
+                } else {
+                    throw new \Exception(Code::TARSSERVERNOFUNCERR);
+                }
+                $paramInfo = $paramInfos[$sFuncName];
+        
+                $rspBuf = $protocol->packRsp($paramInfo, $unpackResult, $args, $returnVal);
+                $resp->send($rspBuf);
+        
+                return;
+            }
+        } catch (\Exception $e) {
+            $unpackResult['iVersion'] = 1;
+            $rspBuf = $protocol->packErrRsp($unpackResult, $e->getCode(), $e->getMessage());
+            $resp->send($rspBuf);
+    
+            return;
+        }
 
     }
 
