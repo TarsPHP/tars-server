@@ -670,7 +670,7 @@ class Server
             return;
         }
         
-        $protocol = ProtocolFactory::getProtocol($this->protocolName);
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
         $protocol->setRoute(RouteFactory::getRoute($this->routeName));
         $protocol->route($req, $resp);
     }
