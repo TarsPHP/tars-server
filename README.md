@@ -117,6 +117,9 @@ onRequest方法:
 * phptars/tars-config: 负责对于平台上传的配置的拉取
 
 ## Changelog
+### v0.4.0(2019-07-16)
+- 支持protobuf
+
 ### v0.3.1(2019-06-21)
 - 支持多个servant
 - 使用swoole addListener 做底层支持

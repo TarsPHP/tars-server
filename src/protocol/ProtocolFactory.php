@@ -18,6 +18,8 @@ class ProtocolFactory
             return new TARSProtocol();
         } elseif ($protocolName == 'json') {
             return new JSONProtocol();
+        } elseif ($protocolName == 'pb') {
+            return new PBProtocol();
         } else {
             $protocolIns = 'Tars\\protocol\\' . strtoupper($protocolName) . 'Protocol';
 
