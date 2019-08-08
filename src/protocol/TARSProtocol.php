@@ -11,9 +11,15 @@ namespace Tars\protocol;
 use Tars\core\Request;
 use Tars\Code;
 use Tars\core\Response;
+use Tars\route\Route;
 
 class TARSProtocol implements Protocol
 {
+    public function setRoute(Route $route)
+    {
+    
+    }
+    
     // 可以支持自定义的
     // 决定传什么参数进来、
     // 路由的方式
