@@ -11,10 +11,17 @@ namespace Tars\protocol;
 use Tars\core\Request;
 use Tars\Code;
 use Tars\core\Response;
+use Tars\route\Route;
 
 class PBProtocol implements Protocol
 {
     protected $response = null;
+    
+    public function setRoute(Route $route)
+    {
+    
+    }
+    
     public function route(Request $request, Response $response, $tarsConfig = [])
     {
         $response->header('content-type', 'application/grpc');
