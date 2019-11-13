@@ -24,10 +24,6 @@
     "require": {
         "php": ">=5.6",
         "phptars/tars-utils": "~0.3",
-        "phptars/tars-client": "~0.2",
-        "phptars/tars-report": "~0.1",
-        "phptars/tars-config": "~0.1",
-        "phptars/tars-monitor": "~0.2",
         "monolog/monolog": "^1.23",
         "illuminate/routing": "~5.5.0",
         "illuminate/events": "~5.5.0"

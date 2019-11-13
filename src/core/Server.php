@@ -11,15 +11,7 @@ namespace Tars\core;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
 use Tars\App;
-use Tars\Consts;
 use Tars\protocol\ProtocolFactory;
-use Tars\monitor\StatFServer;
-use Tars\monitor\PropertyFServer;
-use Tars\registry\QueryFWrapper;
-use Tars\registry\RouteTable;
-use Tars\report\ServerFWrapper;
-use Tars\config\ConfigWrapper;
-use Tars\monitor\cache\SwooleTableStoreCache;
 use Tars\route\RouteFactory;
 use Tars\Code;
 
@@ -126,51 +118,48 @@ class Server
         $logger->pushHandler($levelStreamHandler);
 
 
-        $logger->info("stat/property/keepalive/config/logger service init start...\n");
+//        $logger->info("stat/property/keepalive/config/logger service init start...\n");
         // 初始化被调上报
-        $statF = new StatFServer($locator, Consts::SWOOLE_SYNC_MODE, $statServantName, $moduleName, $interval);
+        //$statF = new StatFServer($locator, Consts::SWOOLE_SYNC_MODE, $statServantName, $moduleName, $interval);
 
-        $monitorStoreClassName =
-            isset($this->servicesInfo['monitorStoreConf']['className']) ?
-                $this->servicesInfo['monitorStoreConf']['className'] :
-                SwooleTableStoreCache::class;
-
-        $monitorStoreConfig = isset($this->servicesInfo['monitorStoreConf']['config'])
-            ? $this->servicesInfo['monitorStoreConf']['config'] : [];
-
-        $registryStoreClassName = isset($this->servicesInfo['registryStoreConf']['className']) ? $this->servicesInfo['registryStoreConf']['className'] : RouteTable::class;
-        $registryStoreConfig = isset($this->servicesInfo['registryStoreConf']['config']) ? $this->servicesInfo['registryStoreConf']['config'] : [];
-
-        $monitorStoreCache = new $monitorStoreClassName($monitorStoreConfig);
-        $statF->initStoreCache($monitorStoreCache);
-
-        $registryStoreCache = new $registryStoreClassName($registryStoreConfig);
-        QueryFWrapper::initStoreCache($registryStoreCache);
+//        $monitorStoreClassName =
+//            isset($this->servicesInfo['monitorStoreConf']['className']) ?
+//                $this->servicesInfo['monitorStoreConf']['className'] :
+//                SwooleTableStoreCache::class;
+//
+//        $monitorStoreConfig = isset($this->servicesInfo['monitorStoreConf']['config'])
+//            ? $this->servicesInfo['monitorStoreConf']['config'] : [];
+//
+//        $registryStoreClassName = isset($this->servicesInfo['registryStoreConf']['className']) ? $this->servicesInfo['registryStoreConf']['className'] : RouteTable::class;
+//        $registryStoreConfig = isset($this->servicesInfo['registryStoreConf']['config']) ? $this->servicesInfo['registryStoreConf']['config'] : [];
+//
+//        $monitorStoreCache = new $monitorStoreClassName($monitorStoreConfig);
+//        //$statF->initStoreCache($monitorStoreCache);
+//
+//        $registryStoreCache = new $registryStoreClassName($registryStoreConfig);
+//        QueryFWrapper::initStoreCache($registryStoreCache);
 
         //初始化特性上报
-        $propertyF = new PropertyFServer($locator, Consts::SWOOLE_SYNC_MODE,
-            $moduleName);
+        //$propertyF = new PropertyFServer($locator, Consts::SWOOLE_SYNC_MODE, $moduleName);
 
         // 初始化服务保活
         // 解析出node上报的配置 tars.tarsnode.ServerObj@tcp -h 127.0.0.1 -p 2345 -t 10000
-        $result = \Tars\Utils::parseNodeInfo($this->tarsServerConfig['node']);
-        $objName = $result['objName'];
-        $host = $result['host'];
-        $port = $result['port'];
-        $serverF = new ServerFWrapper($host, $port, $objName);
+//        $result = \Tars\Utils::parseNodeInfo($this->tarsServerConfig['node']);
+//        $objName = $result['objName'];
+//        $host = $result['host'];
+//        $port = $result['port'];
+//        $serverF = new ServerFWrapper($host, $port, $objName);
 
         // 配置拉取初始化
-        $configF = new ConfigWrapper($this->tarsClientConfig);
+        // $configF = new ConfigWrapper($this->tarsClientConfig);
 
         // 初始化
         App::setTarsConfig($this->tarsConfig);
-        App::setStatF($statF);
-        App::setPropertyF($propertyF);
-        App::setServerF($serverF);
-        App::setConfigF($configF);
+        //App::setStatF($statF);
+        //App::setPropertyF($propertyF);
+        //App::setServerF($serverF);
+        // App::setConfigF($configF);
         App::setLogger($logger);
-
-        $logger->info("stat/property/keepalive/config/logger service init finish...\n");
 
 
         foreach ($this->adapters as $key => $adapter) {
@@ -343,17 +332,17 @@ class Server
         file_put_contents($this->masterPidFile, $server->master_pid);
         file_put_contents($this->managerPidFile, $server->manager_pid);
 
-        // 初始化的一次上报
-        TarsPlatform::keepaliveInit($this->tarsConfig, $server->master_pid);
+//        // 初始化的一次上报
+//        TarsPlatform::keepaliveInit($this->tarsConfig, $server->master_pid);
 
         //拉取配置
-        if (!empty($this->servicesInfo) &&
-            isset($this->servicesInfo['saveTarsConfigFileDir']) &&
-            isset($this->servicesInfo['saveTarsConfigFileName'])) {
-            TarsPlatform::loadTarsConfig($this->tarsConfig,
-                $this->servicesInfo['saveTarsConfigFileDir'],
-                $this->servicesInfo['saveTarsConfigFileName']);
-        }
+//        if (!empty($this->servicesInfo) &&
+//            isset($this->servicesInfo['saveTarsConfigFileDir']) &&
+//            isset($this->servicesInfo['saveTarsConfigFileName'])) {
+//            TarsPlatform::loadTarsConfig($this->tarsConfig,
+//                $this->servicesInfo['saveTarsConfigFileDir'],
+//                $this->servicesInfo['saveTarsConfigFileName']);
+//        }
 
     }
 
@@ -394,17 +383,17 @@ class Server
             }
         }
 
-        if ($workerId == 0) {
-            // 将定时上报的任务投递到task worker 0,只需要投递一次
-            $this->sw->task(
-                [
-                    'application' => $this->application,
-                    'serverName' => $this->serverName,
-                    'masterPid' => $server->master_pid,
-                    'adapters' => array_column($this->tarsServerConfig['adapters'], 'adapterName'),
-                    'client' => $this->tarsClientConfig
-                ], 0);
-        }
+//        if ($workerId == 0) {
+//            // 将定时上报的任务投递到task worker 0,只需要投递一次
+//            $this->sw->task(
+//                [
+//                    'application' => $this->application,
+//                    'serverName' => $this->serverName,
+//                    'masterPid' => $server->master_pid,
+//                    'adapters' => array_column($this->tarsServerConfig['adapters'], 'adapterName'),
+//                    'client' => $this->tarsClientConfig
+//                ], 0);
+//        }
 
         // task worker
         if ($workerId >= $this->workerNum) {
@@ -437,59 +426,59 @@ class Server
 
     public function onTask($server, $taskId, $fromId, $data)
     {
-        switch ($taskId) {
-            // 进行定时上报
-            case 0:
-                {
-                    $serverName = $data['serverName'];
-                    $application = $data['application'];
-
-                    \swoole_timer_tick(10000, function () use ($data, $serverName, $application) {
-
-                        //获取当前存活的worker数目
-                        $processName = $application . '.' . $serverName;
-                        $cmd = "ps wwaux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
-                        exec($cmd, $ret);
-                        $workerNum = count($ret);
-
-                        if ($workerNum >= 1) {
-                            TarsPlatform::keepaliveReport($data);
-                        } //worker全挂，不上报存活 等tars重启
-                        else {
-                            App::getLogger()->error(__METHOD__ . " All workers are not alive any more.");
-                        }
-                    });
-
-                    //主调定时上报
-                    $locator = $data['client']['locator'];
-                    $socketMode = Consts::SWOOLE_SYNC_MODE;
-                    $statServantName = $data['client']['stat'];
-                    $reportInterval = $data['client']['report-interval'];
-
-                    \swoole_timer_tick($reportInterval,
-                        function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
-                            try {
-                                $statF = App::getStatF();
-                                $statF->sendStat();
-                            } catch (\Exception $e) {
-                                App::getLogger()->error((string)$e);
-                            }
-                        });
-
-                    // 基础特性上报
-                    \swoole_timer_tick($reportInterval,
-                        function () use ($locator, $application, $serverName) {
-                            try {
-                                TarsPlatform::basePropertyMonitor($serverName);
-                            } catch (\Exception $exception) {
-                                App::getLogger()->error((string)$exception);
-                            }
-                        });
-                    break;
-                }
-            default:
-                break;
-        }
+//        switch ($taskId) {
+//            // 进行定时上报
+//            case 0:
+//                {
+//                    $serverName = $data['serverName'];
+//                    $application = $data['application'];
+//
+//                    \swoole_timer_tick(10000, function () use ($data, $serverName, $application) {
+//
+//                        //获取当前存活的worker数目
+//                        $processName = $application . '.' . $serverName;
+//                        $cmd = "ps wwaux | grep '" . $processName . "' | grep 'event worker process' | grep -v grep  | awk '{ print $2}'";
+//                        exec($cmd, $ret);
+//                        $workerNum = count($ret);
+//
+//                        if ($workerNum >= 1) {
+//                            TarsPlatform::keepaliveReport($data);
+//                        } //worker全挂，不上报存活 等tars重启
+//                        else {
+//                            App::getLogger()->error(__METHOD__ . " All workers are not alive any more.");
+//                        }
+//                    });
+//
+//                    //主调定时上报
+//                    $locator = $data['client']['locator'];
+//                    $socketMode = Consts::SWOOLE_SYNC_MODE;
+//                    $statServantName = $data['client']['stat'];
+//                    $reportInterval = $data['client']['report-interval'];
+//
+//                    \swoole_timer_tick($reportInterval,
+//                        function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
+//                            try {
+//                                $statF = App::getStatF();
+//                                $statF->sendStat();
+//                            } catch (\Exception $e) {
+//                                App::getLogger()->error((string)$e);
+//                            }
+//                        });
+//
+//                    // 基础特性上报
+//                    \swoole_timer_tick($reportInterval,
+//                        function () use ($locator, $application, $serverName) {
+//                            try {
+//                                TarsPlatform::basePropertyMonitor($serverName);
+//                            } catch (\Exception $exception) {
+//                                App::getLogger()->error((string)$exception);
+//                            }
+//                        });
+//                    break;
+//                }
+//            default:
+//                break;
+//        }
     }
 
 
@@ -522,11 +511,11 @@ class Server
         // 把全局对象带入到请求中,在多个worker之间共享
         $req->server = $this->sw;
 
-        // 处理管理端口相关的逻辑
-        if ($sServantName === 'AdminObj') {
-            TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $resp, $this->sw->master_pid);
-        }
-    
+//        // 处理管理端口相关的逻辑
+//        if ($sServantName === 'AdminObj') {
+//            TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName, $resp, $this->sw->master_pid);
+//        }
+
         $impl = $req->impl;
         $paramInfos = $req->paramInfos;
         $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
