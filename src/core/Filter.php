@@ -9,7 +9,7 @@
 namespace Tars\core;
 
 
-interface PostFilter
+interface Filter
 {
-    public function doFilter(Response &$response);
+    public function doFilter(Request &$request, Response &$response);
 }
