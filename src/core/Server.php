@@ -159,14 +159,13 @@ class Server
         $port = $result['port'];
         $serverF = new ServerFWrapper($host, $port, $objName);
 
-        // 配置拉取初始化
-        $configF = new ConfigWrapper($this->tarsClientConfig);
-
         // 初始化
         App::setTarsConfig($this->tarsConfig);
         App::setStatF($statF);
         App::setPropertyF($propertyF);
         App::setServerF($serverF);
+        // 配置拉取初始化
+        $configF = new ConfigWrapper($this->tarsClientConfig);
         App::setConfigF($configF);
         App::setLogger($logger);
 
@@ -347,12 +346,21 @@ class Server
         TarsPlatform::keepaliveInit($this->tarsConfig, $server->master_pid);
 
         //拉取配置
-        if (!empty($this->servicesInfo) &&
-            isset($this->servicesInfo['saveTarsConfigFileDir']) &&
-            isset($this->servicesInfo['saveTarsConfigFileName'])) {
-            TarsPlatform::loadTarsConfig($this->tarsConfig,
-                $this->servicesInfo['saveTarsConfigFileDir'],
-                $this->servicesInfo['saveTarsConfigFileName']);
+        foreach ($this->adapters as $adapter) {
+            if(empty($this->servicesInfo)){
+                break;
+            }
+            $objName = $adapter['objName'];
+            $serviceInfo = $this->servicesInfo[$objName];
+            if(
+                !empty($serviceInfo) &&
+                isset($serviceInfo['saveTarsConfigFileDir']) &&
+                isset($serviceInfo['saveTarsConfigFileName'])
+            ){
+                TarsPlatform::loadTarsConfig($this->tarsConfig,
+                    $this->servicesInfo[$objName]['saveTarsConfigFileDir'],
+                    $this->servicesInfo[$objName]['saveTarsConfigFileName']);
+            }
         }
 
     }
