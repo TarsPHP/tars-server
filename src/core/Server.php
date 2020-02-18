@@ -358,8 +358,8 @@ class Server
                 isset($serviceInfo['saveTarsConfigFileName'])
             ){
                 TarsPlatform::loadTarsConfig($this->tarsConfig,
-                    $this->servicesInfo['saveTarsConfigFileDir'],
-                    $this->servicesInfo['saveTarsConfigFileName']);
+                    $serviceInfo['saveTarsConfigFileDir'],
+                    $serviceInfo['saveTarsConfigFileName']);
             }
         }
 
