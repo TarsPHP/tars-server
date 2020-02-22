@@ -478,7 +478,7 @@ class Server
                         function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
                             try {
                                 $statF = App::getStatF();
-                                $statF->sendStat();
+                                $statF->sendStat(false); //是服务端上报
                             } catch (\Exception $e) {
                                 App::getLogger()->error((string)$e);
                             }
