@@ -21,6 +21,8 @@ use Tars\registry\RouteTable;
 use Tars\report\ServerFWrapper;
 use Tars\config\ConfigWrapper;
 use Tars\monitor\cache\SwooleTableStoreCache;
+use Tars\route\RouteFactory;
+use Tars\Code;
 
 class Server
 {
@@ -34,6 +36,7 @@ class Server
 
     protected $application;
     protected $serverName = '';
+    protected $routeName = 'default';
     protected $protocolName = 'tars';
 
     protected $workerNum = 4;
@@ -70,6 +73,10 @@ class Server
             $this->protocolName = $this->tarsServerConfig['protocolName'];
         }
 
+        if (isset($this->tarsServerConfig['routeName'])) {
+            $this->routeName = $this->tarsServerConfig['routeName'];
+        }
+        
         $this->workerNum = $this->setting['worker_num'];
         $this->adapters = $this->tarsServerConfig['adapters'];
     }
@@ -153,14 +160,13 @@ class Server
         $port = $result['port'];
         $serverF = new ServerFWrapper($host, $port, $objName);
 
-        // 配置拉取初始化
-        $configF = new ConfigWrapper($this->tarsClientConfig);
-
         // 初始化
         App::setTarsConfig($this->tarsConfig);
         App::setStatF($statF);
         App::setPropertyF($propertyF);
         App::setServerF($serverF);
+        // 配置拉取初始化
+        $configF = new ConfigWrapper($this->tarsClientConfig);
         App::setConfigF($configF);
         App::setLogger($logger);
 
@@ -187,6 +193,18 @@ class Server
                         $this->sw->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type http...\n");
                         break;
+                    case 'grpc' :
+                        $this->sw = new \swoole_http_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $this->sw->on('Request', array($this, 'onRequestForGrpc'));
+                        $logger->info("$objName Server type grpc...\n");
+                        $this->setting['open_http2_protocol'] = true;
+                        break;
+                    case 'http2' :
+                        $this->sw = new \swoole_http_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $this->sw->on('Request', array($this, 'onRequest'));
+                        $logger->info("$objName Server type http2...\n");
+                        $this->setting['open_http2_protocol'] = true;
+                        break;
                     case 'websocket' :
                         $this->sw = new \swoole_websocket_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
                         $this->sw->on('Request', array($this, 'onRequest'));
@@ -206,13 +224,25 @@ class Server
                 switch ($serviceInfo['serverType']) {
                     case 'http' :
                         $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_websocket_protocol' => false, 'open_http_protocol' => true,]);
+                        $portObj->set(['open_http_protocol' => true,]);
                         $portObj->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type http...\n");
                         break;
+                    case 'grpc' :
+                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
+                        $portObj->set(['open_http2_protocol' => true,]);
+                        $portObj->on('Request', array($this, 'onRequest'));
+                        $logger->info("$objName Server type grpc...\n");
+                        break;
+                    case 'http2' :
+                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
+                        $portObj->set(['open_http2_protocol' => true,]);
+                        $portObj->on('Request', array($this, 'onRequest'));
+                        $logger->info("$objName Server type http2...\n");
+                        break;
                     case 'websocket' :
                         $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_websocket_protocol' => true, 'open_http_protocol' => false,]);
+                        $portObj->set(['open_websocket_protocol' => true,]);
                         $portObj->on('Request', array($this, 'onRequest'));
                         $portObj->on('Message', array($this, 'onMessage'));
                         $logger->info("$objName Server type webSocket...\n");
@@ -268,8 +298,6 @@ class Server
         $this->masterPidFile = $this->tarsServerConfig['datapath'] . '/master.pid';
         $this->managerPidFile = $this->tarsServerConfig['datapath'] . '/manager.pid';
 
-        $this->protocol = ProtocolFactory::getProtocol($this->protocolName);
-
         require_once $this->tarsServerConfig['entrance'];
 
         $this->sw->start();
@@ -318,12 +346,21 @@ class Server
         TarsPlatform::keepaliveInit($this->tarsConfig, $server->master_pid);
 
         //拉取配置
-        if (!empty($this->servicesInfo) &&
-            isset($this->servicesInfo['saveTarsConfigFileDir']) &&
-            isset($this->servicesInfo['saveTarsConfigFileName'])) {
-            TarsPlatform::loadTarsConfig($this->tarsConfig,
-                $this->servicesInfo['saveTarsConfigFileDir'],
-                $this->servicesInfo['saveTarsConfigFileName']);
+        foreach ($this->adapters as $adapter) {
+            if(empty($this->servicesInfo)){
+                break;
+            }
+            $objName = $adapter['objName'];
+            $serviceInfo = $this->servicesInfo[$objName];
+            if(
+                !empty($serviceInfo) &&
+                isset($serviceInfo['saveTarsConfigFileDir']) &&
+                isset($serviceInfo['saveTarsConfigFileName'])
+            ){
+                TarsPlatform::loadTarsConfig($this->tarsConfig,
+                    $serviceInfo['saveTarsConfigFileDir'],
+                    $serviceInfo['saveTarsConfigFileName']);
+            }
         }
 
     }
@@ -338,10 +375,12 @@ class Server
     {
         foreach ($this->adapters as $adapter) {
             $objName = $adapter['objName'];
+            $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
 
             switch ($this->servicesInfo[$objName]['serverType']) {
                 case 'tcp' :
                 case 'udp' :
+                case 'grpc':
                     $className = $this->servicesInfo[$objName]['home-class'];
                     self::$impl[$objName] = new $className();
                     $interface = new \ReflectionClass($this->servicesInfo[$objName]['home-api']);
@@ -350,7 +389,7 @@ class Server
                     foreach ($methods as $method) {
                         $docBlock = $method->getDocComment();
                         // 对于注释也应该有自己的定义和解析的方式
-                        self::$paramInfos[$objName][$method->name] = $this->protocol->parseAnnotation($docBlock);
+                        self::$paramInfos[$objName][$method->name] = $protocol->parseAnnotation($docBlock);
                     }
                     break;
                 case 'websocket' :
@@ -439,7 +478,7 @@ class Server
                         function () use ($locator, $socketMode, $statServantName, $serverName, $reportInterval) {
                             try {
                                 $statF = App::getStatF();
-                                $statF->sendStat();
+                                $statF->sendStat(false); //是服务端上报
                             } catch (\Exception $e) {
                                 App::getLogger()->error((string)$e);
                             }
@@ -506,8 +545,108 @@ class Server
             // 预先对impl和paramInfos进行处理,这样可以速度更快
             $rspData = $event->onReceive($request, $response);
         }
+    
+        $impl = $req->impl;
+        $paramInfos = $req->paramInfos;
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
+        try {
+            // 这里通过protocol先进行unpack
+            $result = $protocol->route($req, $resp, $this->tarsConfig);
+            if (is_null($result)) {
+                return;
+            } else {
+                $sFuncName = $result['sFuncName'];
+                $args = $result['args'];
+                $unpackResult = $result['unpackResult'];
+                if (method_exists($impl, $sFuncName)) {
+                    $returnVal = $impl->$sFuncName(...$args);
+                } else {
+                    throw new \Exception(Code::TARSSERVERNOFUNCERR);
+                }
+                $paramInfo = $paramInfos[$sFuncName];
+                $rspBuf = $protocol->packRsp($paramInfo, $unpackResult, $args, $returnVal);
+                $resp->send($rspBuf);
+                return;
+            }
+        } catch (\Exception $e) {
+            $unpackResult['iVersion'] = 1;
+            $rspBuf = $protocol->packErrRsp($unpackResult, $e->getCode(), $e->getMessage());
+            $resp->send($rspBuf);
+            return;
+        }
+        
+    }
 
-        $response->send($rspData);
+    /**
+     * @param $request
+     * @param $response
+     * 针对http请求的响应
+     */
+    public function onRequestForGrpc($request, $response)
+    {
+        $port = $request->server['server_port'];
+        if (!isset($this->portObjNameMap[$port])) {
+            App::getLogger()->error(__METHOD__ . " failed. obj name with port $port not found ");
+            return;
+        }
+        $objName = $this->portObjNameMap[$port];
+
+//        $path = $request->server['request_uri'];
+//        $pathArr = explode($path, '/');
+//        $packageName = $pathArr[1];
+//        $interfaceName = $pathArr[2];
+//
+//        $packageNameArr = explode($packageName, '.');
+//        $objName = end($packageNameArr);
+
+
+        $resp = new Response();
+        $resp->servType = $this->servicesInfo[$objName]['serverType'];
+        $resp->resource = $response;
+
+        $req = new Request();
+        $req->data = get_object_vars($request);
+        $req->reqBuf = $request->rawContent();
+        $req->paramInfos = self::$paramInfos[$objName];
+        $req->impl = self::$impl[$objName];
+        // 把全局对象带入到请求中,在多个worker之间共享
+        $req->server = $this->sw;
+
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
+
+        // 预先对impl和paramInfos进行处理,这样可以速度更快
+        $impl = $req->impl;
+        $paramInfos = $req->paramInfos;
+
+        try {
+            // 这里通过protocol先进行unpack
+            $result = $protocol->route($req, $resp, $this->tarsConfig);
+    
+            if (is_null($result)) {
+                return;
+            } else {
+                $sFuncName = $result['sFuncName'];
+                $args = $result['args'];
+                $unpackResult = $result['unpackResult'];
+                if (method_exists($impl, $sFuncName)) {
+                    $returnVal = $impl->$sFuncName(...$args);
+                } else {
+                    throw new \Exception(Code::TARSSERVERNOFUNCERR);
+                }
+                $paramInfo = $paramInfos[$sFuncName];
+        
+                $rspBuf = $protocol->packRsp($paramInfo, $unpackResult, $args, $returnVal);
+                $resp->send($rspBuf);
+        
+                return;
+            }
+        } catch (\Exception $e) {
+            $unpackResult['iVersion'] = 1;
+            $rspBuf = $protocol->packErrRsp($unpackResult, $e->getCode(), $e->getMessage());
+            $resp->send($rspBuf);
+    
+            return;
+        }
 
     }
 
@@ -542,11 +681,16 @@ class Server
         $resp = new Response();
         $resp->servType = $this->servicesInfo[$objName]['serverType'];
         $resp->resource = $response;
-
-        $event = new Event();
-        $event->setProtocol(ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']));
-        $event->onRequest($req, $resp);
-
+    
+        if ($req->data['server']['request_uri'] == '/monitor/monitor') {
+            $resp->header('Content-Type', 'application/json');
+            $resp->send("{'code':0}");
+            return;
+        }
+        
+        $protocol = ProtocolFactory::getProtocol($this->servicesInfo[$objName]['protocolName']);
+        $protocol->setRoute(RouteFactory::getRoute($this->routeName));
+        $protocol->route($req, $resp);
     }
 
     /**

@@ -8,8 +8,15 @@
 
 namespace Tars\protocol;
 
-class JSONProtocol
+use Tars\route\Route;
+
+class JSONProtocol implements Protocol
 {
+    public function setRoute(Route $route)
+    {
+    
+    }
+    
     // 决定是否要提供一个口子出来,让用户自定义启动服务之前的初始化的动作
     public function route(\Tars\core\Request $request, \Tars\core\Response $response, $tarsConfig = [])  //默认为
     {
