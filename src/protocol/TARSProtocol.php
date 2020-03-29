@@ -28,9 +28,11 @@ class TARSProtocol implements Protocol
         if (!isset($paramInfos[$sFuncName])) {
             throw new \Exception(Code::TARSSERVERUNKNOWNERR);
         }
+        // set the context
+        $this->setContext($request);
+        
         $paramInfo = $paramInfos[$sFuncName];
-
-        // 需要一个函数,专门把参数,转换为args
+        // convert parameters to args
         $args = $this->convertToArgs($paramInfo, $unpackResult);
 
         return [
@@ -38,6 +40,16 @@ class TARSProtocol implements Protocol
             'unpackResult' => $unpackResult,
             'sFuncName' => $sFuncName,
         ];
+    }
+
+    public function setContext(Request $request) {
+        // decode from context
+        $decodeRet = \TUPAPI::decodeReqPacket($request->reqData);
+        $clientContext = $decodeRet["context"];
+        \Tars\App::getLogger()->debug("clientContext:" . var_export($clientContext,true));
+
+        // set the context
+        \Tars\App::setContext($clientContext);
     }
 
     // 另外就是发包的时候怎么组包

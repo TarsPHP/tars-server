@@ -52,10 +52,6 @@ class Server
     protected $portObjNameMap = [];
     protected $adapters = [];
     protected $timerObjName = null;
-    protected $preFilters = [];
-    protected $preFiltersPath = "";
-    protected $postFilters = [];
-    protected $postFiltersPath = "";
 
     public function __construct($conf)
     {
@@ -233,38 +229,7 @@ class Server
                         break;
                 }
             }
-
             $this->portObjNameMap[$port] = $objName;
-
-            // 针对preFilters的初始化
-            $preFiltersPath = $serviceInfo['preFiltersPath'];
-            if (is_dir($preFiltersPath)) {
-                $this->preFilters[$objName]["path"] = $preFiltersPath;
-                $preFiltersFiles = scandir($preFiltersPath);
-                foreach ($preFiltersFiles as $fileName) {
-                    if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
-                        $this->preFilters[$objName]["fileNames"][] = $fileName;
-                    }
-                }
-            } else {
-                $logger->error(__METHOD__ .
-                ' The configuration for preFiltersPath is invalid.\n');
-            }
-
-            // 针对postFilters的初始化
-            $postFiltersPath = $serviceInfo['postFiltersPath'];
-            if (is_dir($postFiltersPath)) {
-                $this->postFilters[$objName]["path"] = $postFiltersPath;
-                $postFiltersFiles = scandir($postFiltersPath);
-                foreach ($postFiltersFiles as $fileName) {
-                    if (is_file($fileName) && strrchr($fileName, '.php') == '.php') {
-                        $this->postFilters[$objName]["fileNames"][] = $fileName;
-                    }
-                }
-            } else {
-                $logger->error(__METHOD__ .
-                    ' The configuration for postFiltersPath is invalid.\n');
-            }
         }
 
         // 判断是否是timer服务
@@ -533,27 +498,6 @@ class Server
                 TarsPlatform::processAdmin($this->tarsConfig, $unpackResult, $sFuncName,
                     $request, $this->sw->master_pid);
             }
-
-            // if any pre filters exist, do the filter step
-            $preFiltersFileNames = $this->preFilters[$objName]["fileNames"];
-            if(!empty($preFiltersFileNames)) {
-                foreach ($preFiltersFileNames as $preFiltersFileName) {
-                    require_once $preFiltersFileName;
-                    $className = $this->namespaceName[$objName] . 'preFilters\\' . basename($preFiltersFileName, '.php');
-
-                    $obj = new $className();
-                    if (!($obj instanceof PreFilter))
-                        continue;
-                    $funcName = "doFilter";
-                    try {
-                        $obj->$funcName($request);
-                    }
-                    catch (\Exception $e) {
-                        App::getLogger()->error(__METHOD__ . " Pre-filter with name ".$preFiltersFileName." failed.");
-                    }
-                }
-            }
-
             $event = new Event();
             $event->setProtocol($protocol);
             $event->setBasePath($this->tarsServerConfig['basepath']);
@@ -563,26 +507,6 @@ class Server
             $rspData = $event->onReceive($request, $response);
         }
 
-        // if any post filters exist, do the filter step
-        $postFiltersFileNames = $this->postFilters[$objName]["fileNames"];
-        if(!empty($postFiltersFileNames)) {
-            foreach ($postFiltersFileNames as $postFiltersFileName) {
-                require_once $postFiltersFileName;
-                $className = $this->namespaceName[$objName] . 'postFilters\\' . basename($postFiltersFileName, '.php');
-
-                $obj = new $className();
-                if (!($obj instanceof PreFilter))
-                    continue;
-                $funcName = "doFilter";
-                try {
-                    $obj->$funcName($response);
-                }
-                catch (\Exception $e) {
-                    App::getLogger()->error(__METHOD__ . " Pre-filter with name ".$postFiltersFileName." failed.");
-                }
-            }
-            $rspData = $response->rspData;
-        }
         $response->send($rspData);
 
     }
