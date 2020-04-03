@@ -23,6 +23,10 @@ class Command
     {
         $cmd = $this->cmd;
         $confPath = $this->confPath;
+        if (!function_exists("exec")) {
+            echo "Function `exec` is not exist, please check php.ini. " . PHP_EOL;
+            exit;
+        }
 
         if ($cmd === 'start') {
             $class = new Start($confPath);
