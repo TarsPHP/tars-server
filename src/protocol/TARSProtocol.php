@@ -15,6 +15,8 @@ use Tars\route\Route;
 
 class TARSProtocol implements Protocol
 {
+    const JSONVERSION = 257;
+
     public function setRoute(Route $route)
     {
     
@@ -50,15 +52,7 @@ class TARSProtocol implements Protocol
     // 另外就是发包的时候怎么组包
     public function unpackReq($data)
     {
-        $decodeRet = \TUPAPI::decodeReqPacket($data);
-
-        return $decodeRet;
-
-//        $respBuf = $decodeRet['sBuffer'];
-
-//        $iVersion = $decodeRet['iVersion'];
-//        $sFuncName = $decodeRet['sFuncName'];
-//        $sServantName = $decodeRet['sServantName'];
+        return \TUPAPI::decodeReqPacket($data);
     }
 
     public function packBuffer($type, $argv, $tag, $name, $iVersion = 3)
@@ -86,9 +80,26 @@ class TARSProtocol implements Protocol
         $packMethod = $packMethods[$type];
         if ($iVersion === 3) {
             $buf = $packMethod($name, $argv, $iVersion);
-        } // jce类型是用tag进行区分的
-        else {
+        } else if ($iVersion === 1) {// jce类型是用tag进行区分的
             $buf = $packMethod($tag, $argv, $iVersion);
+        } else if ($iVersion === self::JSONVERSION) {
+            if ($type == 'struct') {
+                $tmp = (array) $argv;
+                unset($tmp['__fields']);
+                unset($tmp['__typeName']);
+                $buf = $tmp;
+            } else if ($type == 'map') {
+                //没有找到很好的办法从现场的map和vector中取出array，先压成buf再解出来
+                $tmp = \TUPAPI::putMap('1', $argv, 1);
+                $buf = \TUPAPI::getMap('1', $argv, $tmp, true, 1);
+            } else if ($type == 'vector') {
+                $tmp = \TUPAPI::putVector('1', $argv, 1);
+                $buf = \TUPAPI::getVector('1', $argv, $tmp, true, 1);
+            } else {
+                $buf = $argv;
+            }
+        } else {
+            throw new \Exception(Code::TARSSERVERSUCCESS);
         }
 
         return $buf;
@@ -110,9 +121,13 @@ class TARSProtocol implements Protocol
         $statuses = [];
         $encodeBufs = [];
 
+        $msg = empty($msg) ? Code::getMsg($code) : $msg;
+
         if ($iVersion === 1) {
             $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
-                $iMessageType, $iRequestId, $code, empty($msg) ? Code::getMsg($code) : $msg, $encodeBufs, $statuses);
+                $iMessageType, $iRequestId, $code, $msg, $encodeBufs, $statuses);
+        } else if ($iVersion === self::JSONVERSION) {
+            $rspBuf = self::TupEncodeJson($iRequestId, $cPacketType, $iMessageType, null, $code, $msg, [], $statuses);
         } else {
             $servantName = $unpackResult['sServantName'];
             $funcName = $unpackResult['sFuncName'];
@@ -192,8 +207,12 @@ class TARSProtocol implements Protocol
                 $iTimeout = 0;
                 $statuses['STATUS_RESULT_CODE'] = Code::TARSSERVERSUCCESS;
 
-                $rspBuf = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
-                    $iMessageType, $iTimeout, $context, $statuses, $encodeBufs);
+                if ($iVersion == self::JSONVERSION) {
+                    $rspBuf = self::TupEncodeJson($iRequestId, $cPacketType, $iMessageType, $encodeBufs, 0, '', $context, $statuses);
+                } else {
+                    $rspBuf = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
+                                              $iMessageType, $iTimeout, $context, $statuses, $encodeBufs);
+                }
             }
 
             return $rspBuf;
@@ -300,6 +319,10 @@ class TARSProtocol implements Protocol
             $inParams = $paramInfo['inParams'];
             $args = [];
 
+            if ($iVersion == self::JSONVERSION) {
+                $sBuffer = json_decode($sBuffer, true);
+            }
+
             foreach ($inParams as $inParam) {
                 $type = $inParam['type'];
                 $unpackMethod = $unpackMethods[$type];
@@ -319,8 +342,7 @@ class TARSProtocol implements Protocol
                     else {
                         $value = $unpackMethod($inParam['name'], $sBuffer, false, $iVersion);
                     }
-                } // jce类型是用tag进行区分的
-                else {
+                } else if ($iVersion === 1) {// jce类型是用tag进行区分的
                     // 需要判断是否是简单类型,还是vector或map或struct
                     if ($type === 'map' || $type === 'vector') {
                         // 对于复杂的类型,需要进行实例化
@@ -337,6 +359,21 @@ class TARSProtocol implements Protocol
                     else {
                         $value = $unpackMethod($inParam['tag'], $sBuffer, false, $iVersion);
                     }
+                } else if ($iVersion === self::JSONVERSION) {
+                    if ($type === 'map' || $type === 'vector') {
+                        $value = $sBuffer[$inParam['name']];
+                    } elseif ($type === 'struct') {
+                        // 对于复杂的类型,需要进行实例化
+                        $proto = new $inParam['proto']();
+                        $value = $sBuffer[$inParam['name']];
+                        $this->fromArray($value, $proto);
+                        $value = $proto;
+                    } // 基本类型
+                    else {
+                        $value = $sBuffer[$inParam['name']];
+                    }
+                } else {
+                    throw new \Exception(Code::TARSERRORVERSION);
                 }
 
                 $args[] = $value;
@@ -462,5 +499,43 @@ class TARSProtocol implements Protocol
                 }
             }
         }
+    }
+
+    protected function TupEncodeJson($iRequestId, $cPacketType, $iMessageType, $encodeBufs, $resultCode = 0,
+        $resultDesc = '', $context = [], $statuses = [])
+    {
+        $rspBuf = '';
+        $rspBuf .= \TUPAPI::putUInt16('1', 1, 1);
+        $rspBuf .= \TUPAPI::putChar('2', $cPacketType, 1);
+        $rspBuf .= \TUPAPI::putInt32('3', $iRequestId, 1);
+        $rspBuf .= \TUPAPI::putInt32('4', $iMessageType, 1);
+        $rspBuf .= \TUPAPI::putInt32('5', $resultCode, 1);
+
+        $vector = new \TARS_Vector(\TARS::CHAR);
+        if ($encodeBufs !== null) {
+            $tmp = json_encode($encodeBufs);
+            for ($i = 0; $i < strlen($tmp); $i++) {
+                $vector->pushBack($tmp[$i]);
+            }
+        }
+        $rspBuf .= \TUPAPI::putVector('6', $vector, 1);
+
+        $map = new \TARS_MAP(\TARS::STRING, \TARS::STRING);
+        foreach ($statuses as $k => $v) {
+            $map->pushBack([$k => $v]);
+        }
+        $rspBuf .= \TUPAPI::putMap('7', $map, 1);
+
+        $rspBuf .= \TUPAPI::putString('8', $resultDesc, 1);
+
+        $map = new \TARS_MAP(\TARS::STRING, \TARS::STRING);
+        foreach ($context as $k => $v) {
+            $map->pushBack([$k => $v]);
+        }
+        $rspBuf .= \TUPAPI::putMap('9', $map, 1);
+
+        $len = strlen($rspBuf) + 4;
+        $rspBuf = pack('N', $len) . $rspBuf;
+        return $rspBuf;
     }
 }

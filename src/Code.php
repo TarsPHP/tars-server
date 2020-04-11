@@ -25,6 +25,7 @@ class Code
     const TARSINVOKEBYINVALIDESET = -11; //客户端按set规则调用非法
     const TARSCLIENTDECODEERR = -12; //客户端解码异常
 
+    const TARSERRORVERSION = -98; //客户端解码异常
     const TARSSERVERUNKNOWNERR = -99; //服务器端未知异常
 
     public static $msgs = [
@@ -42,6 +43,7 @@ class Code
         self::TARSADAPTERNULL => '客户端选路为空，服务不存在或者所有服务down掉了',
         self::TARSINVOKEBYINVALIDESET => '客户端按set规则调用非法',
         self::TARSCLIENTDECODEERR => '客户端解码异常',
+        self::TARSERRORVERSION => 'iVersion不正确',
     ];
 
     public static function getMsg($code)
