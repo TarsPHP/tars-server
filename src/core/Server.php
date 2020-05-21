@@ -29,6 +29,7 @@ class Server
     private $tarsServerConfig;
     private $tarsClientConfig;
 
+    /** @var \Swoole\Server */
     protected $sw;
     protected $masterPidFile;
     protected $managerPidFile;
@@ -184,78 +185,96 @@ class Server
                     App::getLogger()->error(__METHOD__ . " only support one timer obj, check services.php");
                 }
             }
-
+            $mode = isset($serviceInfo['swooleConf']['mode']) ? $serviceInfo['swooleConf']['mode'] : SWOOLE_PROCESS;
+            $ssl = isset($serviceInfo['swooleConf']['ssl']) ? $serviceInfo['swooleConf']['ssl'] : false;
+            $swooleSetting = isset($serviceInfo['swooleConf']['setting']) ? $serviceInfo['swooleConf']['setting'] : [];
+            $defaultSetting = [];
             if ($key == 0) {
                 switch ($serviceInfo['serverType']) {
                     case 'http' :
-                        $this->sw = new \swoole_http_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $this->sw = new \swoole_http_server($ip, $port, $mode, $sockType);
                         $this->sw->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type http...\n");
                         break;
                     case 'grpc' :
-                        $this->sw = new \swoole_http_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $this->sw = new \swoole_http_server($ip, $port, $mode, $sockType);
                         $this->sw->on('Request', array($this, 'onRequestForGrpc'));
                         $logger->info("$objName Server type grpc...\n");
-                        $this->setting['open_http2_protocol'] = true;
+                        $defaultSetting['open_http2_protocol'] = true;
                         break;
                     case 'http2' :
-                        $this->sw = new \swoole_http_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $this->sw = new \swoole_http_server($ip, $port, $mode, $sockType);
                         $this->sw->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type http2...\n");
-                        $this->setting['open_http2_protocol'] = true;
+                        $defaultSetting['open_http2_protocol'] = true;
                         break;
                     case 'websocket' :
-                        $this->sw = new \swoole_websocket_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $this->sw = new \swoole_websocket_server($ip, $port, $mode, $sockType);
                         $this->sw->on('Request', array($this, 'onRequest'));
                         $this->sw->on('Message', array($this, 'onMessage'));
                         $logger->info("$objName Server type webSocket...\n");
                         break;
                     case 'udp' :
-                        $this->sw = new \swoole_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_UDP);
+                        $this->sw = new \swoole_server($ip, $port, $mode, SWOOLE_SOCK_UDP);
                         $logger->info("$objName Server type udp...\n");
                         break;
                     default : //tcp
-                        $this->sw = new \swoole_server($ip, $port, SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $this->sw = new \swoole_server($ip, $port, $mode, $sockType);
                         $logger->info("$objName Server type tcp...\n");
                         break;
                 }
+                $this->setting = array_merge($this->setting, $swooleSetting, $defaultSetting);
             } else {
                 switch ($serviceInfo['serverType']) {
                     case 'http' :
-                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_http_protocol' => true,]);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $portObj = $this->sw->addlistener($ip, $port, $sockType);
+                        $defaultSetting = ['open_http_protocol' => true];
                         $portObj->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type http...\n");
                         break;
                     case 'grpc' :
-                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_http2_protocol' => true,]);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $portObj = $this->sw->addlistener($ip, $port, $sockType);
+                        $defaultSetting = ['open_http2_protocol' => true,];
                         $portObj->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type grpc...\n");
                         break;
                     case 'http2' :
-                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_http2_protocol' => true,]);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $portObj = $this->sw->addlistener($ip, $port, $sockType);
+                        $defaultSetting = ['open_http2_protocol' => true,];
                         $portObj->on('Request', array($this, 'onRequest'));
                         $logger->info("$objName Server type http2...\n");
                         break;
                     case 'websocket' :
-                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_websocket_protocol' => true,]);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $portObj = $this->sw->addlistener($ip, $port, $sockType);
+                        $defaultSetting = ['open_websocket_protocol' => true,];
                         $portObj->on('Request', array($this, 'onRequest'));
                         $portObj->on('Message', array($this, 'onMessage'));
                         $logger->info("$objName Server type webSocket...\n");
                         break;
                     case 'udp' :
                         $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_UDP);
-                        $portObj->set(['open_websocket_protocol' => false, 'open_http_protocol' => false,]);
+                        $defaultSetting = ['open_websocket_protocol' => false, 'open_http_protocol' => false,];
                         $logger->info("$objName Server type udp...\n");
                         break;
                     default : //tcp
-                        $portObj = $this->sw->addlistener($ip, $port, SWOOLE_SOCK_TCP);
-                        $portObj->set(['open_websocket_protocol' => false, 'open_http_protocol' => false,]);
+                        $sockType = $ssl ? SWOOLE_SOCK_TCP | SWOOLE_SSL : SWOOLE_SOCK_TCP;
+                        $portObj = $this->sw->addlistener($ip, $port, $sockType);
+                        $defaultSetting = ['open_websocket_protocol' => false, 'open_http_protocol' => false,];
                         $logger->info("$objName Server type tcp...\n");
                         break;
+                }
+                $portSetting = array_merge($swooleSetting, $defaultSetting);
+                if (count($portSetting) > 0) {
+                    $portObj->set($portSetting);
                 }
             }
 
