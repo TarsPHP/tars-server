@@ -117,6 +117,13 @@ onRequest方法:
 * phptars/tars-config: 负责对于平台上传的配置的拉取
 
 ## Changelog
+### v0.6.0(2020-07-07)
+- 支持json version
+- 支持tars gateway
+
+### v0.5.0(2020-09-08)
+
+
 ### v0.4.0(2019-07-16)
 - 支持protobuf
 

@@ -227,6 +227,13 @@ The framework relies on the following packages:
 
 Changelog
 
+### v0.6.0(2020-07-07)
+- Support json version
+- Support tars gateway
+
+### v0.5.0(2020-09-08)
+
+
 ### v0.4.0(2019-07-16)
 
 -Support for protobuf

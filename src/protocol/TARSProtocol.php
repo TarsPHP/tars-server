@@ -15,7 +15,8 @@ use Tars\route\Route;
 
 class TARSProtocol implements Protocol
 {
-    const JSONVERSION = 257;
+    //tars统一使用version 5，如果你使用257注意修改
+    const JSON_VERSION = 5;
 
     public function setRoute(Route $route)
     {
@@ -82,9 +83,9 @@ class TARSProtocol implements Protocol
             $buf = $packMethod($name, $argv, $iVersion);
         } else if ($iVersion === 1) {// jce类型是用tag进行区分的
             $buf = $packMethod($tag, $argv, $iVersion);
-        } else if ($iVersion === self::JSONVERSION) {
+        } else if ($iVersion === self::JSON_VERSION) {
             if ($type == 'struct') {
-                $tmp = (array) $argv;
+                $tmp = get_object_vars($argv);
                 unset($tmp['__fields']);
                 unset($tmp['__typeName']);
                 $buf = $tmp;
@@ -126,7 +127,7 @@ class TARSProtocol implements Protocol
         if ($iVersion === 1) {
             $rspBuf = \TUPAPI::encodeRspPacket($iVersion, $cPacketType,
                 $iMessageType, $iRequestId, $code, $msg, $encodeBufs, $statuses);
-        } else if ($iVersion === self::JSONVERSION) {
+        } else if ($iVersion === self::JSON_VERSION) {
             $rspBuf = self::TupEncodeJson($iRequestId, $cPacketType, $iMessageType, null, $code, $msg, [], $statuses);
         } else {
             $servantName = $unpackResult['sServantName'];
@@ -207,7 +208,7 @@ class TARSProtocol implements Protocol
                 $iTimeout = 0;
                 $statuses['STATUS_RESULT_CODE'] = Code::TARSSERVERSUCCESS;
 
-                if ($iVersion == self::JSONVERSION) {
+                if ($iVersion == self::JSON_VERSION) {
                     $rspBuf = self::TupEncodeJson($iRequestId, $cPacketType, $iMessageType, $encodeBufs, 0, '', $context, $statuses);
                 } else {
                     $rspBuf = \TUPAPI::encode($iVersion, $iRequestId, $servantName, $funcName, $cPacketType,
@@ -319,7 +320,7 @@ class TARSProtocol implements Protocol
             $inParams = $paramInfo['inParams'];
             $args = [];
 
-            if ($iVersion == self::JSONVERSION) {
+            if ($iVersion == self::JSON_VERSION) {
                 $sBuffer = json_decode($sBuffer, true);
             }
 
@@ -359,7 +360,7 @@ class TARSProtocol implements Protocol
                     else {
                         $value = $unpackMethod($inParam['tag'], $sBuffer, false, $iVersion);
                     }
-                } else if ($iVersion === self::JSONVERSION) {
+                } else if ($iVersion === self::JSON_VERSION) {
                     if ($type === 'map' || $type === 'vector') {
                         $value = $sBuffer[$inParam['name']];
                     } elseif ($type === 'struct') {
