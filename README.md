@@ -227,6 +227,10 @@ The framework relies on the following packages:
 
 Changelog
 
+### v0.7.0(2021-03-17)
+- del require of LumenRoute & Monolog
+- use new version tarslog
+
 ### v0.6.0(2020-07-07)
 - Support json version
 - Support tars gateway

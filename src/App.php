@@ -47,7 +47,7 @@ class App
 
     /**
      * 日志对象
-     * @var \Monolog\Logger
+     * @var \Tars\log\Log
      */
     public static $logger;
 
@@ -58,7 +58,7 @@ class App
     public static $swooleInstance;
 
     /**
-     * @return \Monolog\Logger
+     * @return \Tars\log\Log
      */
     public static function getLogger()
     {
@@ -66,7 +66,7 @@ class App
     }
 
     /**
-     * @param \Monolog\Logger $logger
+     * @param \Tars\log\Log $logger
      */
     public static function setLogger($logger)
     {

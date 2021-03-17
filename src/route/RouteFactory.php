@@ -12,14 +12,12 @@ class RouteFactory
 {
     /**
      * @param string $routeName
-     * @return LumenRoute|DefaultRoute
+     * @return DefaultRoute
      */
     public static function getRoute($routeName = '')
     {
         if (class_exists($routeName)) {
             return new $routeName;
-        } else if (strtolower($routeName) == 'lumen') {
-            return new LumenRoute();
         } else {
             return new DefaultRoute();
         }

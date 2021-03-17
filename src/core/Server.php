@@ -8,10 +8,9 @@
 
 namespace Tars\core;
 
-use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
 use Tars\App;
 use Tars\Consts;
+use Tars\log\LogFactory;
 use Tars\protocol\ProtocolFactory;
 use Tars\monitor\StatFServer;
 use Tars\monitor\PropertyFServer;
@@ -91,40 +90,10 @@ class Server
         // 日志组件初始化 根据平台配置的level来
         $logLevel = $this->tarsServerConfig['loglevel'];
 
-        $logger = new Logger("tars_logger");
-
-        $levelMap = [
-            'DEBUG' => Logger::DEBUG,
-            'INFO' => Logger::INFO,
-            'NOTICE' => Logger::NOTICE,
-            'WARNING' => Logger::WARNING,
-            'ERROR' => Logger::ERROR,
-            'CRITICAL' => Logger::CRITICAL,
-        ];
-
-        $levelNameMap = [
-            'DEBUG' => 'log_debug.log',
-            'INFO' => 'log_info.log',
-            'NOTICE' => 'log_notice.log',
-            'WARNING' => 'log_warning.log',
-            'ERROR' => 'log_error.log',
-            'CRITICAL' => 'log_critical.log',
-        ];
-        $loggerLevel = $levelMap[$logLevel];
-        $loggerName = $levelNameMap[$logLevel];
-
-        $outStreamHandler = new StreamHandler(
-            $this->setting['log_file'], $loggerLevel
-        );
-
-        $levelStreamHandler = new StreamHandler(
-            $this->tarsServerConfig['logpath'] . $this->tarsServerConfig['app'] . '/' .
-            $this->tarsServerConfig['server'] . '/' . $loggerName, $loggerLevel
-        );
-
-        $logger->pushHandler($outStreamHandler);
-        $logger->pushHandler($levelStreamHandler);
-
+        $logger = LogFactory::getLog("");
+        //$this->setting['log_file']
+        $logger->setPath($this->tarsServerConfig['logpath'] . $this->tarsServerConfig['app'] . '/' .$this->tarsServerConfig['server'] . '/');
+        $logger->setLogLevel($logLevel);
 
         $logger->info("stat/property/keepalive/config/logger service init start...\n");
         // 初始化被调上报
@@ -170,8 +139,7 @@ class Server
         App::setLogger($logger);
 
         $logger->info("stat/property/keepalive/config/logger service init finish...\n");
-
-
+        
         foreach ($this->adapters as $key => $adapter) {
             $serviceInfo = $this->servicesInfo[$adapter['objName']];
             $ip = $adapter['listen']['sIp'];

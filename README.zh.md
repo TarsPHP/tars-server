@@ -117,6 +117,10 @@ onRequest方法:
 * phptars/tars-config: 负责对于平台上传的配置的拉取
 
 ## Changelog
+### v0.7.0(2021-03-17)
+- del require of LumenRoute & Monolog
+- use new version tarslog
+
 ### v0.6.0(2020-07-07)
 - 支持json version
 - 支持tars gateway
